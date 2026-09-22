@@ -1,0 +1,449 @@
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
+body { margin: 0; min-height: 100dvh; }
+
+.app {
+  max-width: var(--container-3xl);
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 12px;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.search { flex: 1; min-height: 40px; }
+.search .tl-input { font-size: 14px; }
+.search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
+.search:focus-within .tl-kbd { visibility: hidden; }
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 24px;
+  padding: 8px 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#count { margin-inline-start: auto; }
+
+.views { display: flex; align-items: center; gap: 14px; }
+.view {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 150ms var(--ease-in-out);
+}
+.view:hover { color: var(--foreground); }
+.view[aria-current="true"] { color: var(--foreground); font-weight: 600; }
+.views .tl-kbd { margin-inline-start: -4px; opacity: .7; }
+#filters:empty { display: none; }
+#filters::before { content: "·"; margin-inline-end: 10px; }
+
+.mail-list { list-style: none; margin: 0; padding: 0; }
+
+.mail {
+  --label: var(--muted-foreground);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  padding: 12px 12px 12px 27px;
+  margin: 0 -12px;
+  border-radius: 10px;
+  isolation: isolate;
+  transition: background-color 150ms var(--ease-in-out);
+}
+/* Registered so the flare can transition it. */
+@property --a { syntax: "<number>"; inherits: false; initial-value: 0; }
+
+/* The glow: light off the bar, full bar height, decaying exponentially to the right (λ ≈ 40px). */
+:is(.mail, .reader-head)::after {
+  --g: var(--label);
+  --a: .13;
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 10px;
+  bottom: 10px;
+  left: 13px;
+  width: 260px;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--g) calc(var(--a) * 100%), transparent) 0,
+    color-mix(in oklab, var(--g) calc(var(--a) * 78%), transparent) 10px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 61%), transparent) 20px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 37%), transparent) 40px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 22%), transparent) 60px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 11%), transparent) 90px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 4%), transparent) 130px,
+    color-mix(in oklab, var(--g) calc(var(--a) * 1.5%), transparent) 180px,
+    transparent 260px);
+  filter: blur(1px);
+  pointer-events: none;
+  transition: --a 180ms var(--ease-out);
+}
+[data-trylle-theme="dark"] :is(.mail, .reader-head)::after { --a: .25; }
+
+/* Hover, keyboard focus, and open rows are lit; the row itself gets no background. */
+.mail:hover::after, .mail:focus-visible::after, .mail[data-lift]::after, .reader-head::after { --a: .26; }
+[data-trylle-theme="dark"] .mail:hover::after,
+[data-trylle-theme="dark"] .mail:focus-visible::after,
+[data-trylle-theme="dark"] .mail[data-lift]::after,
+[data-trylle-theme="dark"] .reader-head::after { --a: .5; }
+
+/* Category tag: vertical text that slides out from behind the bar on hover.
+   The wrapper's right edge sits at the bar, and clips only horizontally. */
+.mail-tag {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(100% - 13px);
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  clip-path: inset(-32px 0 -32px 0);
+  pointer-events: none;
+  user-select: none;
+}
+.mail-tag > span {
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+  translate: calc(100% + 14px) 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--label) 72%, var(--foreground));
+  transition: translate 180ms var(--ease-in-out);
+}
+.mail:hover .mail-tag > span,
+.mail:focus-visible .mail-tag > span,
+.mail[data-lift] .mail-tag > span {
+  translate: 0 0;
+  transition: translate 260ms 50ms var(--ease-out);
+}
+/* While the pointer is over the list, hover wins: the keyboard-selected row
+   goes back to rest so two rows never light up at once. */
+.mail-list:has(.mail:hover) .mail:focus-visible:not(:hover) .mail-tag > span {
+  translate: calc(100% + 14px) 0;
+  transition: translate 180ms var(--ease-in-out);
+}
+.mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .13; }
+[data-trylle-theme="dark"] .mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .25; }
+.mail[data-archiving] .mail-tag > span { translate: calc(100% + 14px) 0; }
+
+/* Stage: the list. While reading, it stays put but falls out of focus. */
+.stage-wrap { position: relative; }
+.stage {
+  --lift: cubic-bezier(.45, 0, .15, 1);
+  transform-origin: 50% 40%;
+  will-change: filter, transform, opacity;
+  transition: filter 336ms var(--lift), opacity 336ms var(--lift), transform 336ms var(--lift);
+}
+.stage[data-behind] {
+  filter: blur(8px) saturate(.85);
+  opacity: .3;
+  transform: scale(.975);
+  pointer-events: none;
+}
+
+/* Reader: an overlay card that rises out of its row. */
+.reader {
+  --label: var(--muted-foreground);
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: -12px;
+  right: -12px;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 22px 24px 20px 27px;
+  border-radius: 16px;
+  box-shadow: var(--card-edge-shadow), 0 24px 48px -24px #0000004d;
+  outline: none;
+}
+[data-trylle-theme="dark"] .reader { box-shadow: var(--ff-shadow-4), 0 24px 56px -20px #000000a6; }
+.reader-surface {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--surface-3);
+}
+[data-trylle-theme="dark"] .reader-surface { background: var(--ff-surface-3); }
+/* The row's stand-in during open/close: outside the clipped card so its tag survives. */
+.reader-ghost {
+  position: absolute;
+  z-index: 4;
+  left: -12px;
+  right: -12px;
+  margin: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.reader-ghost[data-divider]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: color-mix(in oklab, var(--border) 75%, transparent);
+  transition: opacity 120ms var(--ease-out);
+}
+/* While morphing, the card's header plays the subject, sender and bar. */
+.reader-ghost[data-morph] :is(.mail-subject, .mail-from, .mail-time, .mail-bar) { visibility: hidden; }
+.reader-ghost[data-morph]::after { display: none; }
+.reader-ghost[data-morph]::before { opacity: 0; }
+.reader-ghost .mail-snippet { will-change: transform, opacity; }
+.reader-meta-rest { display: inline-block; }
+.reader-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  margin-right: -12px; /* the time sits 12px from the card edge, exactly where the row's does */
+}
+.reader-time {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  padding-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.reader-meta { grid-column: 1 / -1; }
+.reader-head .mail-bar { top: -6px; bottom: -6px; left: -21px; cursor: default; }
+.reader-head::after { top: -2px; bottom: -2px; left: -14px; width: 320px; }
+/* Everything that moves during the morph is positioned, never transformed (see app.js). */
+.reader-subject, .reader-time, .reader-meta, .reader-meta-rest, .reader-body, .reader-foot, .reply { position: relative; }
+.reader-subject { grid-column: 1; }
+.reader-subject {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 25px; /* fixed so the font-size morph doesn't move the lines below */
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+.reader-meta { margin: 6px 0 0; color: var(--muted-foreground); font-size: 13px; }
+.reader-meta strong { color: var(--foreground); font-weight: 500; }
+.reader-body {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  font-size: 14px;
+  line-height: 1.6;
+  color: color-mix(in oklab, var(--foreground) 88%, var(--muted-foreground));
+  white-space: pre-line;
+}
+.reader-body p { margin: 0 0 14px; max-width: 62ch; }
+.reader-body p:last-child { margin-bottom: 0; }
+.reader-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 22px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.reader-foot .tl-kbd, .reply-actions .tl-kbd {
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent);
+}
+.reader:has(.reply:not([hidden])) .reader-foot { display: none; }
+.reply {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+.reply .tl-textarea { min-height: 96px; }
+.reply .tl-textarea:focus-visible {
+  box-shadow: var(--input-edge-shadow);
+  background: color-mix(in oklab, var(--input-surface) 94%, var(--foreground));
+}
+.reply-actions { display: flex; align-items: center; gap: 8px; }
+.reply-actions .tl-kbd { margin-right: auto; }
+
+/* Mailbox switch: quick crossfade; the toolbar stays put. */
+.toolbar { view-transition-name: toolbar; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
+::view-transition-group(toolbar) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Archive: the tube flares white-hot, then the row recedes (driven from app.js). */
+.mail[data-archiving] { pointer-events: none; transform-origin: 50% 0; outline: none; }
+.mail[data-archiving]::after, .mail[data-archiving] .mail-bar::before { transition-duration: 110ms; }
+.mail[data-archiving]::after { --a: .6; }
+[data-trylle-theme="dark"] .mail[data-archiving]::after { --a: 1; }
+.mail[data-archiving] .mail-bar::before {
+  background: #fff;
+  box-shadow:
+    0 0 2px #fff,
+    0 0 6px var(--label),
+    0 0 14px var(--label),
+    4px 0 28px color-mix(in oklab, var(--label) 60%, transparent);
+}
+.mail-bar {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: 15px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+/* The tube: a hot, near-white core with tight saturated halo and a wide soft bloom biased rightward. */
+.mail-bar::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--label) 78%, white);
+  box-shadow: 0 0 1px 0 var(--label), 0 0 3px 0 color-mix(in oklab, var(--label) 70%, transparent);
+  transition: width 150ms var(--ease-in-out), left 150ms var(--ease-in-out),
+    background-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
+}
+[data-trylle-theme="dark"] .mail-bar::before {
+  background: color-mix(in oklab, var(--label) 40%, white);
+  box-shadow: 0 0 1px 0 var(--label), 0 0 3px 0 var(--label);
+}
+.mail-bar:hover::before, .mail-bar:focus-visible::before { left: 5.5px; width: 4px; }
+.mail-bar:focus-visible { outline-offset: -2px; border-radius: 6px; }
+.mail + .mail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: color-mix(in oklab, var(--border) 75%, transparent);
+}
+.mail:focus-visible { outline: none; }
+
+.mail-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mail-subject {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: -.005em;
+  color: color-mix(in oklab, var(--foreground) 82%, var(--muted-foreground));
+}
+.mail[data-unread] .mail-subject { font-weight: 600; color: var(--foreground); }
+
+.mail-time {
+  align-self: start;
+  padding-top: 1px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mail[data-unread] .mail-time { color: var(--foreground); font-weight: 500; }
+
+.mail-snippet {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 20px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mail-from { color: color-mix(in oklab, var(--foreground) 70%, var(--muted-foreground)); font-weight: 500; }
+.mail[data-unread] .mail-from { color: var(--foreground); }
+.mail-from::after { content: " · "; color: var(--muted-foreground); font-weight: 400; }
+
+.label {
+  --label: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  padding: 0 4px 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.label::before {
+  content: "";
+  width: 3px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--label);
+}
+
+.filter-clear {
+  border: 0;
+  padding: 0 4px;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+.filter-clear:hover { color: var(--foreground); text-decoration: underline; }
+
+#empty { padding: 48px 16px; }
+
+@media (max-width: 640px) {
+  .app { padding: 8px 16px 64px; }
+  .toolbar { padding-top: 8px; }
+  .search { min-height: 44px; }
+  .search .tl-kbd { display: none; }
+  .mail { padding: 14px 12px; }
+  .mail-tag { display: none; }
+  .reader { left: -4px; right: -4px; padding: 18px 16px 16px 27px; border-radius: 12px; }
+  .reader-body p { max-width: none; }
+}
