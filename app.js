@@ -678,7 +678,7 @@
     form.noValidate = true;
     const sheet = el("div", "compose-sheet");
     const line = (name, label, placeholder) => {
-      const wrap = el("label", "compose-line");
+      const wrap = el("label", `compose-line compose-${name}`);
       const input = el("input", "compose-input");
       input.name = name;
       input.type = "text";
@@ -688,7 +688,8 @@
       input.value = draft[name];
       // Keep password managers out of the header lines.
       for (const a of ["data-1p-ignore", "data-lpignore", "data-bwignore", "data-form-type"]) input.setAttribute(a, a === "data-form-type" ? "other" : "true");
-      wrap.append(el("span", "compose-label", label), input);
+      if (label) wrap.append(el("span", "compose-label", label));
+      wrap.append(input);
       return wrap;
     };
     const body = el("textarea", "compose-body");
@@ -697,7 +698,10 @@
     body.rows = 7;
     body.value = draft.body;
     body.setAttribute("aria-label", "Message");
-    sheet.append(line("to", "To:", "name or address"), line("subject", "Subject:", ""), body);
+    sheet.append(line("to", "To:", ""), line("subject", null, "Subject"), body);
+    // The card's title follows the subject as you type.
+    const syncTitle = () => { title.textContent = form.subject.value.trim() || "New message"; };
+    sheet.addEventListener("input", (e) => { if (e.target.name === "subject") syncTitle(); });
     const order = ["to", "subject", "body"];
     sheet.addEventListener("keydown", (e) => {
       const i = order.indexOf(e.target.name);
@@ -727,6 +731,7 @@
     actions.append(send, el("kbd", "tl-kbd", "⌘↩"), discard);
     form.append(sheet, error, actions);
     form.addEventListener("submit", (e) => { e.preventDefault(); sendCompose(); });
+    if (draft.subject) title.textContent = draft.subject;
     form.addEventListener("input", () => { error.hidden = true; });
 
     const content = el("div", "reader-content");
