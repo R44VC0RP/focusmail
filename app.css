@@ -294,60 +294,41 @@ body { margin: 0; min-height: 100dvh; }
 .reply-actions .tl-kbd { margin-right: auto; }
 
 /* Compose: the same card, unrolling from under the toolbar with the brand-green tube.
-   The message is one writing surface, not a set of fields. */
+   No inner box: To, Subject and the message sit directly on the card, flush with the header text. */
 .compose {
   position: relative;
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 18px;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
-.compose-sheet {
-  display: grid;
-  padding: 6px 14px 12px;
-  border-radius: 10px;
-  background: var(--input-surface);
-  box-shadow: var(--input-edge-shadow);
-  font-size: 14px;
-  line-height: 1.5;
-  transition: background-color 150ms var(--ease-in-out);
-}
-.compose-sheet:focus-within { background: color-mix(in oklab, var(--input-surface) 94%, var(--foreground)); }
-.compose-line {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-height: 32px;
-  padding: 4px 0;
-  cursor: text;
-}
-.compose-line + .compose-line { border-top: 1px solid color-mix(in oklab, var(--border) 45%, transparent); }
+.compose-sheet { display: grid; font-size: 14px; line-height: 1.5; }
+.compose-line { display: flex; align-items: baseline; gap: 8px; min-height: 28px; padding: 3px 0; cursor: text; }
 .compose-label { flex: none; min-width: 60px; color: var(--muted-foreground); font-weight: 500; }
 .compose-input, .compose-body {
   flex: 1;
   min-width: 0;
   padding: 0;
   border: 0;
-  outline: 0;
   background: transparent;
   color: var(--foreground);
   font: inherit;
   resize: none;
 }
-.compose-input:focus-visible, .compose-body:focus-visible { outline: none; box-shadow: none; }
+[data-trylle-theme] .compose-input:focus-visible, [data-trylle-theme] .compose-body:focus-visible { outline: none; box-shadow: none; }
 .compose-input::placeholder, .compose-body::placeholder { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); opacity: 1; }
 .compose-body {
   display: block;
   width: 100%;
-  min-height: 160px;
-  margin-top: 8px;
+  min-height: 140px;
+  margin-top: 6px;
   padding-top: 12px;
-  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
   line-height: 1.6;
   field-sizing: content;
 }
-.compose-error { margin: -4px 0 0 2px; }
+.compose-error { margin: -6px 0 0; }
 .compose .reply-actions { margin-top: 0; }
 
 .meta-hint { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: 16px; white-space: nowrap; }
@@ -505,7 +486,7 @@ body { margin: 0; min-height: 100dvh; }
   .mail { padding: 14px 12px; }
   .mail-tag { display: none; }
   .meta-hint { display: none; }
-  .compose-sheet { padding: 4px 12px 10px; font-size: 16px; }
+  .compose-sheet { font-size: 16px; }
   .compose-body { min-height: 200px; }
   .reader { left: -4px; right: -4px; padding: 18px 16px 16px 27px; border-radius: 12px; }
   .reader-body p { max-width: none; }
