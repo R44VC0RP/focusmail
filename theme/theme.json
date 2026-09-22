@@ -1,0 +1,38 @@
+{
+  "name": "Graphite",
+  "id": "graphite",
+  "description": "Compact neutral interface styling with layered control edges, Inter and Geist Mono variable fonts, and green action accents.",
+  "source": "https://trylle.com/home",
+  "guide": "README.md",
+  "styles": [
+    "styles/fonts.css",
+    "styles/tokens.css",
+    "styles/components.css"
+  ],
+  "behavior": {
+    "module": "theme.js",
+    "export": "initTrylle",
+    "optional": true
+  },
+  "scope": {
+    "attribute": "data-trylle-theme",
+    "modes": ["light", "dark"],
+    "classPrefix": "tl-"
+  },
+  "fonts": {
+    "sans": "Inter Variable",
+    "mono": "Geist Mono Variable",
+    "assets": "assets/fonts",
+    "provenance": "assets/font-sources.json"
+  },
+  "references": {
+    "dark": "reference/workbench-dark-desktop.png",
+    "light": "reference/workbench-light-desktop.png",
+    "details": "reference/workbench-details.png",
+    "dialog": "reference/workbench-dialog-dark.png",
+    "mobileDialog": "reference/workbench-dialog-mobile.png",
+    "provenance": "reference/manifest.json",
+    "originalVerification": "reference/verification.json"
+  },
+  "playground": "../../experiments/2026-08-31-trylle-theme"
+}
