@@ -293,29 +293,62 @@ body { margin: 0; min-height: 100dvh; }
 .reply-actions { display: flex; align-items: center; gap: 8px; }
 .reply-actions .tl-kbd { margin-right: auto; }
 
-/* Compose: the same card, unrolling from under the toolbar with the brand-green tube. */
+/* Compose: the same card, unrolling from under the toolbar with the brand-green tube.
+   The message is one writing surface, not a set of fields. */
 .compose {
   position: relative;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
-.compose-field {
+.compose-sheet {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-.compose-label { color: var(--muted-foreground); font-size: 13px; font-weight: 500; }
-.compose .tl-input:focus-visible, .compose .tl-textarea:focus-visible {
+  padding: 6px 14px 12px;
+  border-radius: 10px;
+  background: var(--input-surface);
   box-shadow: var(--input-edge-shadow);
-  background: color-mix(in oklab, var(--input-surface) 94%, var(--foreground));
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background-color 150ms var(--ease-in-out);
 }
-.compose-body { min-height: 168px; margin-top: 4px; }
-.compose-error { margin: -2px 0 0 76px; }
-.compose .reply-actions { margin-top: 2px; }
+.compose-sheet:focus-within { background: color-mix(in oklab, var(--input-surface) 94%, var(--foreground)); }
+.compose-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 0;
+  cursor: text;
+}
+.compose-line + .compose-line { border-top: 1px solid color-mix(in oklab, var(--border) 45%, transparent); }
+.compose-label { flex: none; min-width: 60px; color: var(--muted-foreground); font-weight: 500; }
+.compose-input, .compose-body {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  resize: none;
+}
+.compose-input:focus-visible, .compose-body:focus-visible { outline: none; box-shadow: none; }
+.compose-input::placeholder, .compose-body::placeholder { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); opacity: 1; }
+.compose-body {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  line-height: 1.6;
+  field-sizing: content;
+}
+.compose-error { margin: -4px 0 0 2px; }
+.compose .reply-actions { margin-top: 0; }
 
 .meta-hint { display: inline-flex; align-items: center; gap: 6px; margin-inline-start: 16px; white-space: nowrap; }
 .meta-hint .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
@@ -472,8 +505,8 @@ body { margin: 0; min-height: 100dvh; }
   .mail { padding: 14px 12px; }
   .mail-tag { display: none; }
   .meta-hint { display: none; }
-  .compose-field { grid-template-columns: 1fr; gap: 6px; }
-  .compose-error { margin-left: 0; }
+  .compose-sheet { padding: 4px 12px 10px; font-size: 16px; }
+  .compose-body { min-height: 200px; }
   .reader { left: -4px; right: -4px; padding: 18px 16px 16px 27px; border-radius: 12px; }
   .reader-body p { max-width: none; }
 }

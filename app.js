@@ -671,26 +671,47 @@
     metaLine.append(el("strong", null, "You"), document.createTextNode(" · "), el("span", "reader-meta-rest", ME));
     head.append(bar, title, metaLine);
 
+    // One writing surface: header lines with inline "To:" / "Subject:" labels,
+    // a rule, then the body. Enter moves down a line; Backspace on an empty
+    // line moves back up.
     const form = el("form", "compose");
     form.noValidate = true;
-    const field = (name, label, placeholder) => {
-      const wrap = el("label", "compose-field");
-      const input = el("input", "tl-input");
+    const sheet = el("div", "compose-sheet");
+    const line = (name, label, placeholder) => {
+      const wrap = el("label", "compose-line");
+      const input = el("input", "compose-input");
       input.name = name;
       input.type = "text";
       input.placeholder = placeholder;
       input.autocomplete = "off";
       input.spellcheck = false;
       input.value = draft[name];
+      // Keep password managers out of the header lines.
+      for (const a of ["data-1p-ignore", "data-lpignore", "data-bwignore", "data-form-type"]) input.setAttribute(a, a === "data-form-type" ? "other" : "true");
       wrap.append(el("span", "compose-label", label), input);
       return wrap;
     };
-    const body = el("textarea", "tl-textarea compose-body");
+    const body = el("textarea", "compose-body");
     body.name = "body";
     body.placeholder = "Write your message…";
-    body.rows = 8;
+    body.rows = 7;
     body.value = draft.body;
     body.setAttribute("aria-label", "Message");
+    sheet.append(line("to", "To:", "name or address"), line("subject", "Subject:", ""), body);
+    const order = ["to", "subject", "body"];
+    sheet.addEventListener("keydown", (e) => {
+      const i = order.indexOf(e.target.name);
+      if (i < 0 || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Enter" && e.target.tagName === "INPUT") {
+        e.preventDefault();
+        form[order[i + 1]].focus();
+      } else if (e.key === "Backspace" && i > 0 && !e.target.value && (e.target.tagName === "INPUT" || e.target.selectionStart === 0)) {
+        e.preventDefault();
+        const prev = form[order[i - 1]];
+        prev.focus();
+        prev.setSelectionRange(prev.value.length, prev.value.length);
+      }
+    });
     const error = el("p", "tl-field-error compose-error");
     error.hidden = true;
     const actions = el("div", "reply-actions");
@@ -704,7 +725,7 @@
     discard.dataset.size = "sm";
     discard.addEventListener("click", () => closeCompose({ discard: true }));
     actions.append(send, el("kbd", "tl-kbd", "⌘↩"), discard);
-    form.append(field("to", "To", "name@example.com"), field("subject", "Subject", ""), body, error, actions);
+    form.append(sheet, error, actions);
     form.addEventListener("submit", (e) => { e.preventDefault(); sendCompose(); });
     form.addEventListener("input", () => { error.hidden = true; });
 
