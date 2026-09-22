@@ -16,7 +16,9 @@
     Travel: "var(--color-teal-400)",
     Receipts: "var(--color-orange-500)",
     Urgent: "var(--color-red-500)",
+    Sent: "var(--brand)",
   };
+  const ME = "you@focus.mail";
 
   const MAIL = [
     { from: "Priya Natarajan", subject: "Design review moved to 3pm", label: "Work", at: minutesAgo(23), unread: true,
@@ -128,16 +130,19 @@
         "iCloud+ with 2 TB of storage · $9.99 · Renews Oct 9.",
         "Billed to the card ending 0113. You can manage or cancel your subscription in Settings → your name → Subscriptions.",
       ] },
-  ].map((m, i) => ({ ...m, id: `m${i}`, archived: false }))
+  ].map((m, i) => ({ ...m, id: `m${i}`, archived: false, sent: false }))
     .sort((a, b) => b.at - a.at);
 
   const VIEWS = [
-    { id: "inbox", name: "Inbox", has: (m) => !m.archived, empty: "Inbox zero" },
-    { id: "unread", name: "Unread", has: (m) => !m.archived && m.unread, empty: "All caught up" },
+    { id: "inbox", name: "Inbox", has: (m) => !m.archived && !m.sent, empty: "Inbox zero" },
+    { id: "unread", name: "Unread", has: (m) => !m.archived && !m.sent && m.unread, empty: "All caught up" },
+    { id: "sent", name: "Sent", has: (m) => m.sent && !m.archived, empty: "Nothing sent yet" },
     { id: "archive", name: "Archive", has: (m) => m.archived, empty: "Nothing archived yet" },
   ];
   let view = VIEWS[0];
   let open = null; // message shown in the reader, or null in list mode
+  let composing = false;
+  let draft = { to: "", subject: "", body: "" };
 
   const $ = (sel) => document.querySelector(sel);
   const list = $("#list");
@@ -248,7 +253,7 @@
     time.dateTime = m.at.toISOString();
 
     const snippet = el("p", "mail-snippet");
-    snippet.append(el("span", "mail-from", m.from), document.createTextNode(m.snippet));
+    snippet.append(el("span", "mail-from", m.sent ? `To ${m.to}` : m.from), document.createTextNode(m.snippet));
 
     li.append(tagEl(m.label), barButton(m.label), head, time, snippet);
     li.addEventListener("click", () => openMail(m));
@@ -272,8 +277,8 @@
     time.dateTime = m.at.toISOString();
     time.title = m.at.toLocaleString([], { dateStyle: "full", timeStyle: "short" });
     const metaLine = el("p", "reader-meta");
-    const rest = el("span", "reader-meta-rest", `to me · ${formatWhen(m.at)}`);
-    metaLine.append(el("strong", null, m.from), document.createTextNode(" · "), rest);
+    const rest = el("span", "reader-meta-rest", `${m.sent ? `to ${m.to}` : "to me"} · ${formatWhen(m.at)}`);
+    metaLine.append(el("strong", null, m.sent ? "You" : m.from), document.createTextNode(" · "), rest);
     head.append(bar, subject, time, metaLine);
 
     const body = el("div", "reader-body");
@@ -652,6 +657,224 @@
     showToast(`Reply sent to ${m.from}`);
   }
 
+  /* ---------- compose ---------- */
+
+  function renderCompose() {
+    reader.style.setProperty("--label", "var(--brand)");
+    const bar = el("span", "mail-bar");
+    bar.setAttribute("aria-hidden", "true");
+
+    const head = el("header", "reader-head");
+    const title = el("h1", "reader-subject", "New message");
+    title.id = "reader-subject";
+    const metaLine = el("p", "reader-meta");
+    metaLine.append(el("strong", null, "You"), document.createTextNode(" · "), el("span", "reader-meta-rest", ME));
+    head.append(bar, title, metaLine);
+
+    const form = el("form", "compose");
+    form.noValidate = true;
+    const field = (name, label, placeholder) => {
+      const wrap = el("label", "compose-field");
+      const input = el("input", "tl-input");
+      input.name = name;
+      input.type = "text";
+      input.placeholder = placeholder;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.value = draft[name];
+      wrap.append(el("span", "compose-label", label), input);
+      return wrap;
+    };
+    const body = el("textarea", "tl-textarea compose-body");
+    body.name = "body";
+    body.placeholder = "Write your message…";
+    body.rows = 8;
+    body.value = draft.body;
+    body.setAttribute("aria-label", "Message");
+    const error = el("p", "tl-field-error compose-error");
+    error.hidden = true;
+    const actions = el("div", "reply-actions");
+    const send = el("button", "tl-button", "Send");
+    send.type = "submit";
+    send.dataset.variant = "success";
+    send.dataset.size = "sm";
+    const discard = el("button", "tl-button", "Discard");
+    discard.type = "button";
+    discard.dataset.variant = "ghost";
+    discard.dataset.size = "sm";
+    discard.addEventListener("click", () => closeCompose({ discard: true }));
+    actions.append(send, el("kbd", "tl-kbd", "⌘↩"), discard);
+    form.append(field("to", "To", "name@example.com"), field("subject", "Subject", ""), body, error, actions);
+    form.addEventListener("submit", (e) => { e.preventDefault(); sendCompose(); });
+    form.addEventListener("input", () => { error.hidden = true; });
+
+    const content = el("div", "reader-content");
+    content.append(head, form);
+    reader.replaceChildren(el("div", "reader-surface"), content);
+  }
+
+  const composeValues = () => {
+    const f = reader.querySelector(".compose");
+    return f ? { to: f.to.value.trim(), subject: f.subject.value.trim(), body: f.body.value.trim() } : { ...draft };
+  };
+  const focusFirstEmpty = () => {
+    const f = reader.querySelector(".compose");
+    (["to", "subject", "body"].map((n) => f[n]).find((i) => !i.value.trim()) || f.body).focus({ preventScroll: true });
+  };
+
+  async function openCompose() {
+    if (composing || morph) return;
+    composing = true;
+
+    if (open) {
+      // Reading: the card stays, its content becomes the composer; the row returns to the list.
+      open = null;
+      if (hiddenRow) { hiddenRow.style.visibility = ""; hiddenRow = null; }
+      const content = reader.querySelector(".reader-content");
+      if (content && !reduceMotion()) {
+        await content.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, easing: EASE }).finished;
+      }
+      renderCompose();
+      if (!reduceMotion()) {
+        reader.querySelector(".reader-content").animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: EASE_OUT });
+      }
+      focusFirstEmpty();
+      return;
+    }
+
+    openScrollY = window.scrollY;
+    renderCompose();
+    reader.hidden = false;
+    placeReader();
+    stage.dataset.behind = "";
+    if (reduceMotion()) { focusFirstEmpty(); return; }
+
+    // No source row: the card unrolls from a row-height sliver just under the toolbar.
+    const cardTop = parseFloat(reader.style.top);
+    const fullHeight = reader.offsetHeight;
+    const shadow = shadowOf(reader);
+    const surface = reader.querySelector(".reader-surface");
+    const bar = reader.querySelector(".reader-head .mail-bar");
+    const barCS = getComputedStyle(bar);
+    const barMid = bar.getBoundingClientRect().height / 2;
+    const surfaceColor = getComputedStyle(surface).backgroundColor;
+    const form = reader.querySelector(".compose");
+    const title = reader.querySelector(".reader-subject");
+    const metaLine = reader.querySelector(".reader-meta");
+    const metaStrong = metaLine.querySelector("strong");
+    const titleColor = getComputedStyle(title).color, metaColor = getComputedStyle(metaLine).color, strongColor = getComputedStyle(metaStrong).color;
+    const D = RISE;
+    morph = Promise.all([
+      keyframes(reader, [
+        { top: `${cardTop + 18}px`, height: "40px", borderRadius: "10px", boxShadow: shadow.start },
+        { top: `${cardTop}px`, height: `${fullHeight}px`, borderRadius: "16px", boxShadow: shadow.end },
+      ], { duration: D, easing: LIFT }),
+      keyframes(surface, [{ backgroundColor: clear(surfaceColor) }, { backgroundColor: surfaceColor }], { duration: D * 0.3, easing: EASE_OUT }),
+      // the tube lights from a point in the middle and extends to the header's height
+      keyframes(bar, [
+        { top: `${parseFloat(barCS.top) + barMid - 3}px`, bottom: `${parseFloat(barCS.bottom) + barMid - 3}px` },
+        { top: barCS.top, bottom: barCS.bottom },
+      ], { duration: D, easing: LIFT }),
+      // the header arrives with the card: title from just below, meta a beat later
+      keyframes(title, [{ top: "10px", color: clear(titleColor) }, { top: "0px", color: titleColor }], { duration: D * 0.7, easing: EASE_OUT }),
+      keyframes(metaLine, [{ top: "10px", color: clear(metaColor) }, { top: "0px", color: metaColor }], { delay: D * 0.15, duration: D * 0.7, easing: EASE_OUT }),
+      keyframes(metaStrong, [{ color: clear(strongColor) }, { color: strongColor }], { delay: D * 0.15, duration: D * 0.7, easing: EASE_OUT }),
+      keyframes(form, [{ top: "24px" }, { top: "0px" }], { duration: D, easing: LIFT }),
+    ]);
+    await morph;
+    morph = null;
+    [reader, surface, bar, title, metaLine, metaStrong, form].forEach((node) => node.getAnimations().forEach((a) => a.cancel()));
+    focusFirstEmpty();
+  }
+
+  async function closeCompose({ discard = false, sent = false } = {}) {
+    if (!composing || morph) return;
+    const values = composeValues();
+    const hasContent = !sent && !discard && Object.values(values).some(Boolean);
+    draft = discard || sent ? { to: "", subject: "", body: "" } : values;
+    composing = false;
+
+    const finish = () => {
+      reader.hidden = true;
+      reader.replaceChildren();
+      reader.getAnimations().forEach((a) => a.cancel());
+      reader.style.height = "";
+      reader.style.opacity = "";
+      delete stage.dataset.behind;
+      render();
+    };
+
+    if (reduceMotion()) { finish(); }
+    else if (sent) {
+      // Up and away, while the list comes back into focus.
+      const cardTop = parseFloat(reader.style.top);
+      delete stage.dataset.behind;
+      morph = keyframes(reader, [
+        { top: `${cardTop}px`, opacity: 1 }, { top: `${cardTop - 36}px`, opacity: 0 },
+      ], { duration: 240, easing: "cubic-bezier(.4, 0, 1, 1)" });
+      await morph;
+      morph = null;
+      finish();
+    } else {
+      // Roll back up into the sliver it came from.
+      const cardTop = parseFloat(reader.style.top);
+      const fullHeight = reader.offsetHeight;
+      const shadow = shadowOf(reader);
+      const surface = reader.querySelector(".reader-surface");
+      const surfaceColor = getComputedStyle(surface).backgroundColor;
+      const form = reader.querySelector(".compose");
+      const bar = reader.querySelector(".reader-head .mail-bar");
+      const barCS = getComputedStyle(bar);
+      const barMid = bar.getBoundingClientRect().height / 2;
+      const title = reader.querySelector(".reader-subject");
+      const metaLine = reader.querySelector(".reader-meta");
+      const metaStrong = metaLine.querySelector("strong");
+      const titleColor = getComputedStyle(title).color, metaColor = getComputedStyle(metaLine).color, strongColor = getComputedStyle(metaStrong).color;
+      const D = FALL;
+      delete stage.dataset.behind;
+      morph = Promise.all([
+        keyframes(reader, [
+          { top: `${cardTop}px`, height: `${fullHeight}px`, borderRadius: "16px", boxShadow: shadow.end },
+          { top: `${cardTop + 18}px`, height: "40px", borderRadius: "10px", boxShadow: shadow.start },
+        ], { duration: D, easing: LIFT }),
+        keyframes(bar, [
+          { top: barCS.top, bottom: barCS.bottom },
+          { top: `${parseFloat(barCS.top) + barMid - 3}px`, bottom: `${parseFloat(barCS.bottom) + barMid - 3}px` },
+        ], { duration: D, easing: LIFT }),
+        keyframes(metaLine, [{ top: "0px", color: metaColor }, { top: "10px", color: clear(metaColor) }], { duration: D * 0.5, easing: EASE }),
+        keyframes(metaStrong, [{ color: strongColor }, { color: clear(strongColor) }], { duration: D * 0.5, easing: EASE }),
+        keyframes(title, [{ top: "0px", color: titleColor }, { top: "10px", color: clear(titleColor) }], { delay: D * 0.1, duration: D * 0.5, easing: EASE }),
+        keyframes(surface, [{ backgroundColor: surfaceColor }, { backgroundColor: clear(surfaceColor) }], { delay: D * 0.55, duration: D * 0.45, easing: EASE }),
+        keyframes(form, [{ top: "0px" }, { top: "24px" }], { duration: D, easing: LIFT }),
+      ]);
+      await morph;
+      morph = null;
+      finish();
+    }
+
+    if (hasContent) showToast("Draft saved · press c to resume");
+    else if (discard && Object.values(values).some(Boolean)) showToast("Draft discarded");
+    (list.querySelector(".mail") || search).focus({ preventScroll: true });
+  }
+
+  function sendCompose() {
+    const form = reader.querySelector(".compose");
+    const values = composeValues();
+    const error = reader.querySelector(".compose-error");
+    const fail = (field, text) => { error.textContent = text; error.hidden = false; form[field].focus(); };
+    if (!values.to) return fail("to", "Add a recipient.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.to) && !/^[A-Za-z][\w' -]{0,40}$/.test(values.to)) return fail("to", "That doesn't look like an address or a name.");
+    if (!values.body) return fail("body", "Write something first.");
+    const to = values.to.includes("@") ? values.to.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : values.to;
+    MAIL.unshift({
+      id: `s${Date.now()}`, from: "You", to, subject: values.subject || "(no subject)", label: "Sent", at: new Date(),
+      unread: false, archived: false, sent: true,
+      snippet: values.body.replace(/\s+/g, " ").slice(0, 160),
+      body: values.body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean),
+    });
+    closeCompose({ sent: true }).then(() => showToast(`Sent to ${to}`));
+  }
+
   /* ---------- archive ---------- */
 
   async function archive(li) {
@@ -779,9 +1002,9 @@
 
   // Clicking anywhere in the blurred space behind the card closes it.
   document.addEventListener("pointerdown", (e) => {
-    if (!open || morph) return;
+    if ((!open && !composing) || morph) return;
     if (reader.contains(e.target) || toolbar.contains(e.target) || toast.contains(e.target)) return;
-    closeReader();
+    if (composing) closeCompose(); else closeReader();
   });
 
   /* ---------- keyboard ---------- */
@@ -810,12 +1033,20 @@
       return;
     }
 
+    // Compose mode: the fields own the keyboard.
+    if (composing) {
+      if (e.key === "Escape") { e.preventDefault(); closeCompose(); }
+      else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendCompose(); }
+      return;
+    }
+
     if (inField) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     // Reader mode.
     if (open) {
       if (e.key === "Escape") { e.preventDefault(); closeReader(); }
+      else if (e.key === "c") { e.preventDefault(); openCompose(); }
       else if (e.key === "Enter") { e.preventDefault(); openReply(); }
       else if (e.key === "e") { e.preventDefault(); archiveOpen(); }
       else if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); step(1); }
@@ -829,6 +1060,7 @@
     if (e.key === "ArrowRight") { e.preventDefault(); cycleView(1); return; }
     if (e.key === "ArrowLeft") { e.preventDefault(); cycleView(-1); return; }
     if (e.key === "/") { e.preventDefault(); search.focus(); search.select(); return; }
+    if (e.key === "c") { e.preventDefault(); openCompose(); return; }
     const rows = [...list.querySelectorAll(".mail")];
     const idx = rows.indexOf(document.activeElement);
     if (e.key === "Enter" && idx >= 0) {
