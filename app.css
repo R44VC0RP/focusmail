@@ -71,6 +71,11 @@ body { margin: 0; min-height: 100dvh; }
   isolation: isolate;
   transition: background-color 150ms var(--ease-in-out);
 }
+/* Selecting text inside an email tints it with that email's label; unlabeled mail gets a neutral tint. */
+:is(.mail, .reader) ::selection {
+  background: color-mix(in oklab, var(--label) 35%, transparent);
+  color: var(--foreground);
+}
 /* Registered so the flare can transition it. */
 @property --a { syntax: "<number>"; inherits: false; initial-value: 0; }
 
