@@ -1277,6 +1277,20 @@
   document.addEventListener("mousemove", pointerBack, { passive: true });
   document.addEventListener("pointerdown", pointerBack);
 
+  /* ---------- compact toolbar ---------- */
+
+  // Slim the toolbar once the list scrolls under it. Two thresholds stop it
+  // flickering when you rest right at the edge.
+  let compactFrame = 0;
+  const syncToolbar = () => {
+    compactFrame = 0;
+    const y = window.scrollY;
+    if (y > 24) toolbar.dataset.compact = "";
+    else if (y < 8) delete toolbar.dataset.compact;
+  };
+  window.addEventListener("scroll", () => { compactFrame ||= requestAnimationFrame(syncToolbar); }, { passive: true });
+  syncToolbar();
+
   /* ---------- keyboard ---------- */
 
   search.addEventListener("input", () => {

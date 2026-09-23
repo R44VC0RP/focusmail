@@ -16,26 +16,57 @@ body { margin: 0; min-height: 100dvh; }
   padding: 32px 24px 96px;
 }
 
+/* The toolbar reaches past the column by the app's side padding, so rows' tubes and
+   glows (which overhang the column) pass underneath it instead of beside it.
+   Scrolled, it slims down; its bottom margin grows by exactly what the padding and
+   search lose, so the page below never shifts. */
 .toolbar {
+  --toolbar-ease: 240ms var(--ease-out);
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 0 12px;
-  background: color-mix(in oklab, var(--background) 88%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  margin: 0 -24px;
+  padding: 16px 24px 12px;
+  background: color-mix(in oklab, var(--background) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: padding var(--toolbar-ease), margin var(--toolbar-ease);
 }
+/* A short fade under the bar, so rows dissolve into it rather than meeting a hard line. */
+.toolbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: linear-gradient(color-mix(in oklab, var(--background) 92%, transparent), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--toolbar-ease);
+}
+.toolbar[data-compact] { padding-top: 8px; padding-bottom: 8px; margin-bottom: 18px; }
+.toolbar[data-compact]::after { opacity: 1; }
 
-.search { flex: 1; min-height: 40px; }
-.search .tl-input { font-size: 14px; }
+.search { flex: 1; min-height: 40px; cursor: text; transition: min-height var(--toolbar-ease), box-shadow 180ms var(--ease-out); }
+.toolbar[data-compact] .search { min-height: 34px; }
+#theme-toggle { transition: width var(--toolbar-ease), height var(--toolbar-ease), min-height var(--toolbar-ease); }
+.toolbar[data-compact] #theme-toggle { width: 34px; height: 34px; }
+/* Hover: the faintest hint of the focus hairline, so the bar feels touchable. */
+.search.tl-input-group:hover:not(:focus-within) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent), var(--overview-metric-card-shadow);
+}
+[data-trylle-theme="dark"] .search.tl-input-group:hover:not(:focus-within) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), var(--ff-shadow-3);
+}
+.search .tl-input { height: auto; min-height: 0; font-size: 14px; } /* the group sets the height, so it can slim down */
 .search input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 .search .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
 .search:focus-within .tl-kbd { visibility: hidden; }
 /* Focus: a hairline of light with a soft halo, like the app's other glows, instead of a thick ring. */
-.search.tl-input-group { transition: box-shadow 180ms var(--ease-out); }
 .search.tl-input-group:focus-within {
   outline: none;
   box-shadow:
@@ -560,8 +591,12 @@ body { margin: 0; min-height: 100dvh; }
 
 @media (max-width: 640px) {
   .app { padding: 8px 16px 64px; }
-  .toolbar { padding-top: 8px; }
+  /* Phone: the same slimming, from a 44px search to 40px, with the margin making up the 12px. */
+  .toolbar { margin: 0 -16px; padding: 8px 16px 12px; }
+  .toolbar[data-compact] { padding-top: 6px; padding-bottom: 6px; margin-bottom: 12px; }
   .search { min-height: 44px; }
+  .toolbar[data-compact] .search { min-height: 40px; }
+  .toolbar[data-compact] #theme-toggle { width: 40px; height: 40px; min-height: 40px; }
   .search .tl-kbd { display: none; }
   .mail { padding: 14px 12px; }
   .mail-tag { display: none; }
