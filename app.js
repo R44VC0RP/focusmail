@@ -1390,6 +1390,7 @@
     const dark = mode === "dark";
     themeIcon.setAttribute("href", dark ? "#i-sun" : "#i-moon");
     toggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    $("#favicon").href = dark ? "./favicon-dark.svg" : "./favicon-light.svg";
   }
   toggle.addEventListener("click", () => {
     const next = document.body.getAttribute("data-trylle-theme") === "dark" ? "light" : "dark";
