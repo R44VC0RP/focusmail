@@ -107,8 +107,8 @@ body { margin: 0; min-height: 100dvh; }
 [data-trylle-theme="dark"] :is(.mail, .reader-head)::after { --a: .25; }
 
 /* Hover, keyboard focus, and open rows are lit; the row itself gets no background. */
-.mail:hover::after, .mail:focus-visible::after, .mail[data-lift]::after, .reader-head::after { --a: .26; }
-[data-trylle-theme="dark"] .mail:hover::after,
+:where(:root:not([data-pointer-away])) .mail:hover::after, .mail:focus-visible::after, .mail[data-lift]::after, .reader-head::after { --a: .26; }
+:where(:root:not([data-pointer-away])) [data-trylle-theme="dark"] .mail:hover::after,
 [data-trylle-theme="dark"] .mail:focus-visible::after,
 [data-trylle-theme="dark"] .mail[data-lift]::after,
 [data-trylle-theme="dark"] .reader-head::after { --a: .5; }
@@ -145,7 +145,7 @@ body { margin: 0; min-height: 100dvh; }
   color: color-mix(in oklab, var(--label) 72%, var(--foreground));
   transition: translate 180ms var(--ease-in-out);
 }
-.mail:hover .mail-tag > span,
+:where(:root:not([data-pointer-away])) .mail:hover .mail-tag > span,
 .mail:focus-visible .mail-tag > span,
 .mail[data-lift] .mail-tag > span {
   translate: 0 0;
@@ -153,12 +153,12 @@ body { margin: 0; min-height: 100dvh; }
 }
 /* While the pointer is over the list, hover wins: the keyboard-selected row
    goes back to rest so two rows never light up at once. */
-.mail-list:has(.mail:hover) .mail:focus-visible:not(:hover) .mail-tag > span {
+:where(:root:not([data-pointer-away])) .mail-list:has(.mail:hover) .mail:focus-visible:not(:hover) .mail-tag > span {
   translate: calc(100% + 14px) 0;
   transition: translate 180ms var(--ease-in-out);
 }
-.mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .13; }
-[data-trylle-theme="dark"] .mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .25; }
+:where(:root:not([data-pointer-away])) .mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .13; }
+:where(:root:not([data-pointer-away])) [data-trylle-theme="dark"] .mail-list:has(.mail:hover) .mail:focus-visible:not(:hover)::after { --a: .25; }
 .mail[data-archiving] .mail-tag > span { translate: calc(100% + 14px) 0; }
 
 /* Stage: the list. While reading, it stays put but falls out of focus. */

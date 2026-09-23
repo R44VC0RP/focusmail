@@ -1033,6 +1033,19 @@
     if (composing) closeCompose(); else closeReader();
   });
 
+  /* ---------- hover ---------- */
+
+  // Chrome leaves :hover stuck when the pointer exits through a tab or app
+  // switch, so row hover styles are gated off until the pointer moves again.
+  const root = document.documentElement;
+  const pointerAway = () => root.setAttribute("data-pointer-away", "");
+  const pointerBack = () => root.removeAttribute("data-pointer-away");
+  window.addEventListener("blur", pointerAway);
+  root.addEventListener("mouseleave", pointerAway);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pointerAway(); });
+  document.addEventListener("mousemove", pointerBack, { passive: true });
+  document.addEventListener("pointerdown", pointerBack);
+
   /* ---------- keyboard ---------- */
 
   search.addEventListener("input", () => {
@@ -1093,7 +1106,7 @@
       e.preventDefault();
       openMail(MAIL.find((x) => x.id === rows[idx].dataset.id));
     } else if (e.key === "e") {
-      const target = idx >= 0 ? rows[idx] : list.querySelector(".mail:hover");
+      const target = idx >= 0 ? rows[idx] : (root.hasAttribute("data-pointer-away") ? null : list.querySelector(".mail:hover"));
       if (target) { e.preventDefault(); archive(target); }
     } else if (e.key === "ArrowDown" || e.key === "j") {
       e.preventDefault();
