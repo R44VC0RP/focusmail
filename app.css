@@ -2,6 +2,13 @@ html { scrollbar-width: none; }
 html::-webkit-scrollbar { display: none; }
 body { margin: 0; min-height: 100dvh; }
 
+/* Keyboard focus: a faint 1px hairline in place of the theme's thick 3px ring.
+   Mouse clicks never show it (:focus-visible only); rows and fields have their own cues. */
+[data-trylle-theme] :where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 1px solid color-mix(in oklab, var(--foreground) 22%, transparent);
+  outline-offset: 2px;
+}
+
 .app {
   max-width: var(--container-3xl);
   margin: 0 auto;
