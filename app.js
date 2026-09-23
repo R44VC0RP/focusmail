@@ -18,7 +18,7 @@
     Urgent: "var(--color-red-500)",
     Sent: "var(--brand)",
   };
-  const ME = "you@focus.mail";
+  const ME = "you@embox.email";
 
   const MAIL = [
     { from: "Priya Natarajan", subject: "Design review moved to 3pm", label: "Work", at: minutesAgo(23), unread: true,
@@ -117,10 +117,10 @@
         "Oct 3 – Oct 5 · Cabin with river view · 2 guests · Host: Dana. Check-in after 3 PM, checkout by 11 AM. The door code will be sent the morning of arrival.",
         "Cancellation is free until Sep 26. After that, the first night is non-refundable.",
       ] },
-    { from: "GitHub", subject: "[focus-mail] 3 pull requests need your review", label: "Work", at: daysAgo(8, 11, 41), unread: false,
+    { from: "GitHub", subject: "[embox] 3 pull requests need your review", label: "Work", at: daysAgo(8, 11, 41), unread: false,
       snippet: "sidebar: remove folder tree (#41) · search: add label: prefix (#43) · list: clamp snippets to two lines (#44).",
       body: [
-        "You have 3 pull requests awaiting review in focus-mail.",
+        "You have 3 pull requests awaiting review in embox.",
         "#41 sidebar: remove folder tree — 12 files changed. #43 search: add label: prefix — 3 files changed. #44 list: clamp snippets to two lines — 1 file changed.",
         "Reviews requested 8 days ago.",
       ] },
@@ -148,7 +148,7 @@
   /* ---------- persistence ---------- */
 
   // Archive and read state, sent mail and the draft survive a reload.
-  const STORE = "focus-mail-state";
+  const STORE = "embox-state";
   function loadState() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
@@ -1394,7 +1394,7 @@
   }
   toggle.addEventListener("click", () => {
     const next = document.body.getAttribute("data-trylle-theme") === "dark" ? "light" : "dark";
-    localStorage.setItem("focus-mail-theme", next);
+    localStorage.setItem("embox-theme", next);
     applyTheme(next);
   });
   applyTheme(document.body.getAttribute("data-trylle-theme") || "light");
