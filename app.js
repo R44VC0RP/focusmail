@@ -131,8 +131,49 @@
         "iCloud+ with 2 TB of storage · $9.99 · Renews Oct 9.",
         "Billed to the card ending 0113. You can manage or cancel your subscription in Settings → your name → Subscriptions.",
       ] },
-  ].map((m, i) => ({ ...m, id: `m${i}`, archived: false, sent: false }))
-    .sort((a, b) => b.at - a.at);
+  ].map((m, i) => ({ ...m, id: `m${i}`, archived: false, sent: false }));
+
+  // Demo mail for beacons. Meetings carry an `event` (what a calendar invite's
+  // .ics attachment provides); everything else is read from the text itself.
+  const minutesFromNow = (m) => new Date(now.getTime() + m * 60000);
+  MAIL.push(
+    { id: "d-zoom", from: "Jun Park", subject: "Design sync", label: "Work", at: minutesAgo(52), unread: false,
+      event: { title: "Design sync", start: minutesFromNow(6) },
+      snippet: "Jun Park is inviting you to a scheduled Zoom meeting. Topic: Design sync.",
+      body: [
+        "Jun Park is inviting you to a scheduled Zoom meeting.",
+        "Topic: Design sync. We'll walk through the empty state and the compose changes.",
+        "Join Zoom Meeting: https://zoom.us/j/81234567890",
+      ] },
+    { id: "d-meet", from: "Google Calendar", subject: "Invitation: Q4 roadmap review", label: "Work", at: minutesAgo(130), unread: false,
+      event: { title: "Q4 roadmap review", start: minutesFromNow(14) },
+      snippet: "Jun Park has invited you to Q4 roadmap review. Join with Google Meet.",
+      body: [
+        "Jun Park has invited you to this event: Q4 roadmap review.",
+        "Join with Google Meet: https://meet.google.com/xqd-mbnv-rpt",
+      ] },
+    { id: "d-link", from: "Linear", subject: "Your sign-in link for Linear", label: "Security", at: minutesAgo(2), unread: true,
+      snippet: "Click the link below to sign in to Linear. The link expires in 15 minutes.",
+      body: [
+        "Click the link below to sign in to Linear. The link expires in 15 minutes.",
+        "Sign in: https://linear.app/auth/email?token=demo",
+        "If you didn't request this, you can safely ignore this email.",
+      ] },
+    { id: "d-pay", from: "Figma", subject: "Invoice #4417 for $45.00 is due Friday", label: "Finance", at: minutesAgo(200), unread: true,
+      snippet: "Your invoice for Figma Professional is ready. Amount due: $45.00, due Friday.",
+      body: [
+        "Your invoice for Figma Professional (September) is ready.",
+        "Amount due: $45.00, due Friday.",
+        "Pay invoice: https://invoice.stripe.com/i/acct_1Embox/live_demo",
+      ] },
+    { id: "d-ups", from: "UPS", subject: "Your package is out for delivery", label: "Receipts", at: minutesAgo(95), unread: true,
+      snippet: "Your package from Apple is out for delivery and will arrive today by 7pm.",
+      body: [
+        "Good news: your package from Apple is out for delivery and will arrive today by 7pm.",
+        "Track your package: https://www.ups.com/track?tracknum=1Z999AA10123456784",
+      ] },
+  );
+  MAIL.sort((a, b) => b.at - a.at);
 
   const VIEWS = [
     { id: "inbox", name: "Inbox", has: (m) => !m.archived && !m.sent, empty: "Inbox zero" },
@@ -1136,7 +1177,7 @@
     msgs.forEach((m) => { m.archived = toArchive; });
     lis.forEach((li) => li.remove());
     save();
-    updateCodeBar();
+    updateBeacon();
     updateCount(currentFilter());
     const remaining = list.querySelectorAll(".mail");
     if (!remaining.length) { empty.hidden = false; empty.textContent = emptyText(); }
@@ -1257,7 +1298,7 @@
     updateCount(f);
     updateFilters(f);
     updateViews();
-    updateCodeBar();
+    updateBeacon();
   }
 
   function setQuery(q) {
@@ -1288,30 +1329,174 @@
   document.addEventListener("mousemove", pointerBack, { passive: true });
   document.addEventListener("pointerdown", pointerBack);
 
-  /* ---------- verification codes ---------- */
+  /* ---------- beacons ---------- */
 
-  // A recent email carrying a sign-in code shows in a bar under the search.
-  // Enter copies it when nothing else has focus; Esc dismisses it.
-  const codeBar = $("#code-bar");
-  const codeCopy = $("#code-copy");
-  const CODE_WINDOW = 10 * 60 * 1000; // codes older than this have usually expired
+  // A beacon is a short-lived, lit row under the search that surfaces one
+  // actionable thing from recent mail: a sign-in code, a meeting about to start,
+  // a sign-in link, a payment link, a delivery, or a question waiting on you.
+  // Enter acts on it when nothing else has focus; Esc dismisses it. When several
+  // apply, the most time-sensitive shows and the rest queue behind it.
+  const beaconEl = $("#beacon");
+  const beaconAct = $("#beacon-act");
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+  const beaconsDone = new Set(); // beacon ids acted on or dismissed
+  let beacon = null; // the beacon on show
+  let beaconQueue = [];
+  let beaconAnim = null;
+  let beaconSwap = 0;
+
+  const textOf = (m) => `${m.subject}\n${m.body.join("\n")}`;
+  const urlsIn = (text) => [...text.matchAll(/https?:\/\/[^\s<>"')]+/g)].map((x) => x[0].replace(/[.,;:!?]+$/, ""));
+  const firstUrl = (m, re) => urlsIn(textOf(m)).find((u) => re.test(u));
+  const recent = (m, ms) => Date.now() - m.at.getTime() < ms;
+  // Opened pages must start inside the key press or click (before any await), or popup blockers step in.
+  const openUrl = (url) => { window.open(url, "_blank", "noopener"); return true; };
+
   const CODE_HINT = /\b(code|verification|verify|passcode|one[- ]time|otp|2fa|sign[- ]?in|log[- ]?in)\b/i;
   const CODE_TOKEN = /(?<![\w$#•.,-])(\d{3,4}[ -]\d{3,4}|\d{4,8})(?![\w%]|[.,]\d)/;
-  const codesDone = new Set(); // ids copied or dismissed
-  let codeMail = null;
-  let codeTimer = 0;
-  let codeAnim = null;
+  const MEETING_LINK = /^https:\/\/(meet\.google\.com|([\w-]+\.)?zoom\.us|teams\.microsoft\.com|teams\.live\.com|[\w-]+\.webex\.com|whereby\.com)\//i;
+  const PAY_LINK = /^https:\/\/((invoice|checkout|buy)\.stripe\.com|pay\.[\w.-]+|(www\.)?paypal\.(com|me)|[\w.-]+\/([\w-]+\/)*(pay|invoices?|billing)([/?#]|$))/i;
+  const TRACK_LINK = /^https:\/\/(www\.)?(ups\.com\/track|fedex\.com\/.*track|(tools\.)?usps\.com\/.*track|dhl\.com\/.*track|amazon\.[\w.]+\/.*(progress-tracker|ship-track)|[\w-]+\.narvar\.com|[\w-]+\.aftership\.com)/i;
+  const SIGN_IN_HINT = /\b(sign[- ]?in|log[- ]?in|magic link|confirm (your )?(email|account)|verify (your )?email)\b/i;
+
+  function findCode(m) {
+    const text = textOf(m);
+    if (!CODE_HINT.test(text)) return null;
+    const hit = text.match(CODE_TOKEN);
+    if (!hit) return null;
+    const value = hit[1].replace(/\D/g, "");
+    return { value, display: value.length === 6 ? `${value.slice(0, 3)} ${value.slice(3)}` : value };
+  }
+
+  function meetingService(url) {
+    const host = new URL(url).hostname;
+    return /meet\.google/.test(host) ? "Google Meet" : /zoom\.us/.test(host) ? "Zoom" : /teams\./.test(host) ? "Teams" : /webex/.test(host) ? "Webex" : "Whereby";
+  }
+
+  function startsIn(start) {
+    const d = Math.round((start - Date.now()) / MIN);
+    return d >= 1 ? `in ${d} min` : d >= -1 ? "starting now" : `started ${-d} min ago`;
+  }
+
+  // Every beacon a message offers. `rank` orders kinds by urgency, `key` orders
+  // within a kind. Each kind's time window (codes 10 min, links 15 min, meetings
+  // from 15 min before to 10 min after the start) is checked here.
+  function beaconsFor(m) {
+    if (m.sent || m.archived) return [];
+    const text = textOf(m);
+    const out = [];
+    const code = recent(m, 10 * MIN) && findCode(m);
+    if (code) {
+      const at = m.at.getTime();
+      out.push({ kind: "code", rank: 0, key: -at, name: m.from, detail: "code", value: code.display,
+        action: "Copy", doneText: "Copied", run: () => copyText(code.value) });
+    }
+    const meet = m.event && firstUrl(m, MEETING_LINK);
+    if (meet) {
+      const start = m.event.start.getTime();
+      if (Date.now() > start - 15 * MIN && Date.now() < start + 10 * MIN) {
+        out.push({ kind: "meeting", rank: 1, key: start, name: m.event.title, detail: meetingService(meet), value: startsIn(start), start,
+          action: "Join", doneText: "Opened", run: () => openUrl(meet) });
+      }
+    }
+    const signIn = !code && !meet && recent(m, 15 * MIN) && SIGN_IN_HINT.test(text) && urlsIn(text).find((u) => !PAY_LINK.test(u) && !MEETING_LINK.test(u));
+    if (signIn) {
+      const at = m.at.getTime();
+      out.push({ kind: "link", rank: 2, key: -at, name: m.from, detail: "sign-in link", value: "",
+        action: "Open", doneText: "Opened", run: () => openUrl(signIn) });
+    }
+    const pay = !code && recent(m, 14 * 24 * HOUR) && firstUrl(m, PAY_LINK);
+    if (pay) {
+      const amount = text.match(/[$€£]\s?\d[\d,]*(\.\d{2})?/)?.[0] || "";
+      const due = text.match(/\bdue (?:on |by )?((?:mon|tues|wednes|thurs|fri|satur|sun)day|today|tomorrow|[A-Z][a-z]{2,8} \d{1,2})\b/i)?.[1];
+      out.push({ kind: "pay", rank: 3, key: -m.at.getTime(), name: m.from, detail: due ? `invoice · due ${due}` : "invoice", value: amount,
+        action: "Pay", doneText: "Opened", run: () => openUrl(pay) });
+    }
+    const track = recent(m, 24 * HOUR) && firstUrl(m, TRACK_LINK);
+    if (track) {
+      const status = /out for delivery/i.test(text) ? "out for delivery" : /arriv\w* today/i.test(text) ? "arriving today" : /shipped/i.test(text) ? "shipped" : "on its way";
+      out.push({ kind: "delivery", rank: 4, key: -m.at.getTime(), name: m.from, detail: "package", value: status,
+        action: "Track", doneText: "Opened", run: () => openUrl(track) });
+    }
+    // A person (not a service) asked you something and you haven't opened it yet.
+    if (m.unread && !m.event && (m.label === "Work" || m.label === "Personal") && recent(m, 24 * HOUR)) {
+      const question = m.body.join(" ").match(/[^.!?]*\?/)?.[0]?.trim();
+      if (question) {
+        out.push({ kind: "waiting", rank: 5, key: -m.at.getTime(), name: m.from, detail: "asked", value: `“${question}”`,
+          action: "Reply", doneText: "", run: async () => {
+            if (morph) await morph;
+            if (composing) await closeCompose();
+            await openMail(m);
+            openReply();
+            return true;
+          } });
+      }
+    }
+    return out.map((b) => ({ ...b, id: `${b.kind}:${m.id}`, mail: m }));
+  }
+
+  const allBeacons = () => MAIL.flatMap(beaconsFor)
+    .filter((b) => !beaconsDone.has(b.id))
+    .sort((a, b) => a.rank - b.rank || a.key - b.key);
+
+  const nothingFocused = () => !document.activeElement || document.activeElement === document.body;
+  const coarse = matchMedia("(pointer: coarse)");
+
+  function syncBeaconHint() {
+    if (!beacon || beaconEl.hasAttribute("data-done")) return;
+    const hint = beaconAct.querySelector(".beacon-hint");
+    if (!hint) return;
+    if (nothingFocused() && !coarse.matches) {
+      hint.replaceChildren(el("kbd", "tl-kbd", "↩"), document.createTextNode(beacon.action));
+    } else {
+      hint.textContent = `${coarse.matches ? "Tap" : "Click"} to ${beacon.action.toLowerCase()}`;
+    }
+  }
+
+  function syncMore() {
+    const more = beaconQueue.length - 1;
+    let chip = beaconAct.querySelector(".beacon-more");
+    if (more > 0) {
+      if (!chip) { chip = el("span", "beacon-more"); beaconAct.querySelector(".beacon-hint").before(chip); }
+      chip.textContent = `+${more}`;
+      chip.title = `${more} more waiting`;
+    } else chip?.remove();
+  }
+
+  function paintBeacon(b) {
+    beaconEl.dataset.kind = b.kind;
+    beaconEl.style.setProperty("--label", LABELS[b.mail.label] || "var(--brand)");
+    delete beaconEl.dataset.done;
+    const tube = el("span", "beacon-tube");
+    tube.setAttribute("aria-hidden", "true");
+    const text = el("span", "beacon-text");
+    text.append(el("strong", null, b.name), document.createTextNode(` ${b.detail}`));
+    const parts = [tube, text];
+    if (b.value) {
+      const value = el("span", "beacon-value");
+      // Code groups sit apart by a thin gap; a monospace space would read as a hole.
+      if (b.kind === "code") value.append(...b.value.split(" ").map((g) => el("span", null, g)));
+      else value.textContent = b.value;
+      parts.push(value);
+    }
+    parts.push(el("span", "beacon-hint"));
+    beaconAct.replaceChildren(...parts);
+    beaconAct.setAttribute("aria-label", `${b.action}: ${b.name} ${b.detail} ${b.value}`.replace(/\s+/g, " ").trim());
+    syncMore();
+    syncBeaconHint();
+  }
 
   // The bar grows out of the toolbar (and collapses back) instead of popping,
   // so the list below glides rather than jumps. The toolbar's row gap opens
   // with it, so nothing snaps at either end.
-  function animateCodeBar(show) {
-    codeAnim?.forEach((a) => a.cancel());
-    codeAnim = null;
+  function animateBeacon(show) {
+    beaconAnim?.forEach((a) => a.cancel());
+    beaconAnim = null;
     const settle = () => { if (!reader.hidden && !morph) placeReader(); };
-    if (show) codeBar.hidden = false;
-    if (reduceMotion()) { codeBar.hidden = !show; settle(); return; }
-    const h = codeBar.offsetHeight;
+    if (show) beaconEl.hidden = false;
+    if (reduceMotion()) { beaconEl.hidden = !show; settle(); return; }
+    const h = beaconEl.offsetHeight;
     const timing = {
       duration: show ? 320 : 260,
       easing: show ? "cubic-bezier(.2, .8, .2, 1)" : "cubic-bezier(.4, 0, .2, 1)",
@@ -1323,67 +1508,52 @@
       : [{ height: `${h}px`, opacity: 1 }, { opacity: 0, offset: 0.6 }, { height: "0px", opacity: 0 }];
     const gap = [{ rowGap: "0px" }, { rowGap: "8px" }];
     if (!show) gap.reverse();
-    const anims = [codeBar.animate(bar, timing), toolbar.animate(gap, timing)];
-    codeAnim = anims;
+    const anims = [beaconEl.animate(bar, timing), toolbar.animate(gap, timing)];
+    beaconAnim = anims;
     Promise.all(anims.map((a) => a.finished)).then(() => {
-      if (!show) codeBar.hidden = true;
+      if (!show) beaconEl.hidden = true;
       anims.forEach((a) => a.cancel());
-      codeAnim = null;
+      beaconAnim = null;
       settle();
     }, () => {});
   }
 
-  function findCode(m) {
-    const text = `${m.subject}\n${m.body.join("\n")}`;
-    if (!CODE_HINT.test(text)) return null;
-    const hit = text.match(CODE_TOKEN);
-    if (!hit) return null;
-    const value = hit[1].replace(/\D/g, "");
-    return { value, display: value.length === 6 ? `${value.slice(0, 3)} ${value.slice(3)}` : value };
+  // One beacon handing over to the next: the old content lifts away, then the
+  // new one arrives with the usual stagger and the glow re-lights in its colour.
+  function swapBeacon(next) {
+    const token = ++beaconSwap;
+    if (reduceMotion()) { paintBeacon(next); return; }
+    const out = beaconAct.animate(
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-3px)" }],
+      { duration: 140, easing: EASE, fill: "forwards" },
+    );
+    out.finished.then(() => {
+      if (token !== beaconSwap) return;
+      beaconEl.dataset.swap = beaconEl.dataset.swap === "a" ? "b" : "a";
+      paintBeacon(next);
+      out.cancel();
+    }, () => {});
   }
 
-  const nothingFocused = () => !document.activeElement || document.activeElement === document.body;
-  const coarse = matchMedia("(pointer: coarse)");
-
-  function syncCodeHint() {
-    if (codeBar.hidden || codeBar.hasAttribute("data-copied")) return;
-    const hint = codeBar.querySelector(".code-hint");
-    if (nothingFocused() && !coarse.matches) {
-      hint.replaceChildren(el("kbd", "tl-kbd", "↩"), document.createTextNode("Copy"));
-    } else {
-      hint.textContent = coarse.matches ? "Tap to copy" : "Click to copy";
+  function updateBeacon() {
+    // Let a confirmation ("Copied", "Opened") play out before anything replaces it.
+    if (beacon && (beaconEl.hasAttribute("data-done") || beaconEl.hasAttribute("data-pressing"))) return;
+    beaconQueue = allBeacons();
+    const next = beaconQueue[0] || null;
+    if (next && beacon && next.id === beacon.id) {
+      // Same beacon: refresh live text (a meeting's countdown, the queue count) in place.
+      beacon = next;
+      const value = beaconAct.querySelector(".beacon-value");
+      if (value && next.kind === "meeting") value.textContent = next.value;
+      syncMore();
+      return;
     }
+    const wasHidden = beaconEl.hidden;
+    beacon = next;
+    if (!next) { if (!wasHidden) animateBeacon(false); return; }
+    if (wasHidden) { paintBeacon(next); animateBeacon(true); } else swapBeacon(next);
   }
-
-  function updateCodeBar() {
-    const cutoff = Date.now() - CODE_WINDOW;
-    const next = MAIL.find((m) => !m.sent && !m.archived && !codesDone.has(m.id) && m.at.getTime() > cutoff && findCode(m)) || null;
-    if (next === codeMail) return;
-    const wasHidden = codeBar.hidden;
-    codeMail = next;
-    clearTimeout(codeTimer);
-    if (next) {
-      const code = findCode(next);
-      codeBar.style.setProperty("--label", LABELS[next.label] || "var(--brand)");
-      const from = codeBar.querySelector(".code-from");
-      from.replaceChildren(el("strong", null, next.from), document.createTextNode(" code"));
-      // Groups sit apart by a thin gap; a monospace space would read as a hole.
-      codeBar.querySelector(".code-value").replaceChildren(...code.display.split(" ").map((g) => el("span", null, g)));
-      codeCopy.setAttribute("aria-label", `Copy ${next.from} code ${code.display}`);
-      codeBar.removeAttribute("data-copied");
-      // A hairline along the bottom drains as the code's 10 minutes run out.
-      const life = codeBar.querySelector(".code-life");
-      life.style.animation = "none";
-      void life.offsetWidth;
-      life.style.animation = `code-life ${CODE_WINDOW}ms linear ${next.at.getTime() - Date.now()}ms forwards`;
-      if (wasHidden) animateCodeBar(true); else codeBar.hidden = false;
-      syncCodeHint();
-      // Hide it again once the code has most likely expired.
-      codeTimer = setTimeout(updateCodeBar, next.at.getTime() + CODE_WINDOW - Date.now() + 50);
-    } else if (!wasHidden) {
-      animateCodeBar(false);
-    }
-  }
+  setInterval(updateBeacon, 15 * 1000); // meetings count down and enter their window; old beacons expire
 
   async function copyText(text) {
     try {
@@ -1401,34 +1571,36 @@
     }
   }
 
-  async function copyCode({ fromKey = false } = {}) {
-    const m = codeMail;
-    if (!m || codeBar.hasAttribute("data-copied") || codeBar.hasAttribute("data-pressing")) return;
-    const code = findCode(m);
+  async function actBeacon({ fromKey = false } = {}) {
+    const b = beacon;
+    if (!b || beaconEl.hasAttribute("data-done") || beaconEl.hasAttribute("data-pressing")) return;
+    const result = Promise.resolve(b.run()); // synchronously, so an opened page counts as user-initiated
     // From the keyboard, let the ↩ key visibly go down before it turns into the confirmation.
-    if (fromKey && !reduceMotion()) codeBar.dataset.pressing = "";
-    const [ok] = await Promise.all([copyText(code.value), new Promise((r) => setTimeout(r, fromKey ? 110 : 0))]);
-    delete codeBar.dataset.pressing;
-    if (!ok) { showToast("Couldn't copy the code"); return; }
-    codesDone.add(m.id);
-    codeBar.dataset.copied = ""; // the tube flares and a sheen crosses the bar
+    if (fromKey && b.doneText && !reduceMotion()) beaconEl.dataset.pressing = "";
+    const [ok] = await Promise.all([result, new Promise((r) => setTimeout(r, fromKey && b.doneText ? 110 : 0))]);
+    delete beaconEl.dataset.pressing;
+    if (!ok) { showToast(b.kind === "code" ? "Couldn't copy the code" : "Couldn't open that"); return; }
+    beaconsDone.add(b.id);
+    if (!b.doneText) { beacon = null; updateBeacon(); return; } // e.g. Reply: the email itself takes over
+    beaconEl.dataset.done = ""; // the tube flares and a sheen crosses the bar
     const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     check.setAttribute("class", "tl-icon");
     check.innerHTML = '<use href="#i-check"/>';
-    codeBar.querySelector(".code-hint").replaceChildren(check, document.createTextNode("Copied"));
-    setTimeout(() => { if (codeMail === m) updateCodeBar(); }, 1200);
+    beaconAct.querySelector(".beacon-hint").replaceChildren(check, document.createTextNode(b.doneText));
+    setTimeout(() => { if (beacon === b) { beacon = null; updateBeacon(); } }, 1200);
   }
 
-  function dismissCode() {
-    if (!codeMail) return;
-    codesDone.add(codeMail.id);
-    updateCodeBar();
+  function dismissBeacon() {
+    if (!beacon || beaconEl.hasAttribute("data-done")) return;
+    beaconsDone.add(beacon.id);
+    beacon = null;
+    updateBeacon();
   }
 
-  codeCopy.addEventListener("click", () => copyCode());
-  $("#code-dismiss").addEventListener("click", dismissCode);
-  document.addEventListener("focusin", syncCodeHint);
-  document.addEventListener("focusout", () => setTimeout(syncCodeHint));
+  beaconAct.addEventListener("click", () => actBeacon());
+  $("#beacon-dismiss").addEventListener("click", dismissBeacon);
+  document.addEventListener("focusin", syncBeaconHint);
+  document.addEventListener("focusout", () => setTimeout(syncBeaconHint));
 
   // Demo: a sign-in code arrives a few seconds after the page loads, as if it had just come in.
   setTimeout(() => {
@@ -1544,12 +1716,12 @@
     if (e.key === "Escape" && selected.size) {
       e.preventDefault();
       clearSelection();
-    } else if (e.key === "Enter" && codeMail && nothingFocused()) {
+    } else if (e.key === "Enter" && beacon && nothingFocused()) {
       e.preventDefault();
-      copyCode({ fromKey: true });
-    } else if (e.key === "Escape" && codeMail && nothingFocused()) {
+      actBeacon({ fromKey: true });
+    } else if (e.key === "Escape" && beacon && nothingFocused()) {
       e.preventDefault();
-      dismissCode();
+      dismissBeacon();
     } else if (e.key === "Enter" && idx >= 0) {
       e.preventDefault();
       openMail(mailFor(rows[idx]));

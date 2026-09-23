@@ -36,17 +36,11 @@
       <button class="tl-button" data-variant="ghost" data-icon-only id="theme-toggle" type="button" aria-label="Switch to dark mode">
         <svg class="tl-icon"><use id="theme-icon" href="#i-moon"/></svg>
       </button>
-      <div class="code-bar" id="code-bar" role="status" hidden>
-        <button class="code-copy" id="code-copy" type="button">
-          <span class="code-tube" aria-hidden="true"></span>
-          <span class="code-from"></span>
-          <span class="code-value"></span>
-          <span class="code-hint"></span>
-        </button>
-        <button class="code-dismiss" id="code-dismiss" type="button" aria-label="Dismiss code">
+      <div class="beacon" id="beacon" role="status" hidden>
+        <button class="beacon-act" id="beacon-act" type="button"></button>
+        <button class="beacon-dismiss" id="beacon-dismiss" type="button" aria-label="Dismiss">
           <svg class="tl-icon"><use href="#i-x"/></svg>
         </button>
-        <span class="code-life" aria-hidden="true"></span>
       </div>
     </header>
 
@@ -99,6 +93,13 @@
           <div><dt>Select</dt><dd><kbd class="tl-kbd">x</kbd></dd></div>
           <div><dt>Select all</dt><dd><kbd class="tl-kbd">⌘</kbd><kbd class="tl-kbd">A</kbd></dd></div>
           <div><dt>Undo</dt><dd><kbd class="tl-kbd">z</kbd></dd></div>
+        </dl>
+      </section>
+      <section class="keys-group">
+        <h3>Beacons</h3>
+        <dl class="keys">
+          <div><dt>Copy, join, pay, open or reply</dt><dd><kbd class="tl-kbd">↩</kbd></dd></div>
+          <div><dt>Dismiss</dt><dd><kbd class="tl-kbd">esc</kbd></dd></div>
         </dl>
       </section>
       <section class="keys-group">
