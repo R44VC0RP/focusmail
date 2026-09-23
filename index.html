@@ -20,8 +20,6 @@
   </script>
   <svg hidden aria-hidden="true">
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   </svg>
@@ -33,9 +31,6 @@
         <input id="search" class="tl-input" type="search" placeholder="Search mail" autocomplete="off" spellcheck="false" aria-label="Search mail">
         <kbd class="tl-kbd" id="search-hint">/</kbd>
       </label>
-      <button class="tl-button" data-variant="ghost" data-icon-only id="theme-toggle" type="button" aria-label="Switch to dark mode">
-        <svg class="tl-icon"><use id="theme-icon" href="#i-moon"/></svg>
-      </button>
       <div class="beacon" id="beacon" role="status" hidden>
         <button class="beacon-act" id="beacon-act" type="button"></button>
         <button class="beacon-dismiss" id="beacon-dismiss" type="button" aria-label="Dismiss">
@@ -83,6 +78,7 @@
           <div><dt>Back, clear selection</dt><dd><kbd class="tl-kbd">esc</kbd></dd></div>
           <div><dt>Switch mailbox</dt><dd><kbd class="tl-kbd">←</kbd><kbd class="tl-kbd">→</kbd></dd></div>
           <div><dt>Search</dt><dd><kbd class="tl-kbd">/</kbd></dd></div>
+          <div><dt>Light / dark theme</dt><dd><kbd class="tl-kbd">t</kbd></dd></div>
         </dl>
       </section>
       <section class="keys-group">

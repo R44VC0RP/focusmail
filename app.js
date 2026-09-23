@@ -219,8 +219,6 @@
   const views = $("#views");
   const meta = $(".meta");
   const search = $("#search");
-  const toggle = $("#theme-toggle");
-  const themeIcon = $("#theme-icon");
   const reader = $("#reader");
   const stage = $("#stage");
   const stageWrap = $(".stage-wrap");
@@ -1689,6 +1687,7 @@
       return;
     }
     if (e.key === "z") { e.preventDefault(); undoLast(); return; }
+    if (e.key === "t") { e.preventDefault(); toggleTheme(); return; }
 
     // Reader mode.
     if (open) {
@@ -1752,17 +1751,21 @@
 
   /* ---------- theme ---------- */
 
+  // No button: `t` switches and remembers the choice. Until you choose, the
+  // theme follows the system's light/dark setting, live.
   function applyTheme(mode) {
     document.body.setAttribute("data-trylle-theme", mode);
-    const dark = mode === "dark";
-    themeIcon.setAttribute("href", dark ? "#i-sun" : "#i-moon");
-    toggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
-    $("#favicon").href = dark ? "./favicon-dark.svg" : "./favicon-light.svg";
+    $("#favicon").href = mode === "dark" ? "./favicon-dark.svg" : "./favicon-light.svg";
   }
-  toggle.addEventListener("click", () => {
+  function toggleTheme() {
     const next = document.body.getAttribute("data-trylle-theme") === "dark" ? "light" : "dark";
     localStorage.setItem("embox-theme", next);
     applyTheme(next);
+    showToast(`${next === "dark" ? "Dark" : "Light"} theme · t to switch`);
+  }
+  const systemDark = matchMedia("(prefers-color-scheme: dark)");
+  systemDark.addEventListener("change", (e) => {
+    if (!localStorage.getItem("embox-theme")) applyTheme(e.matches ? "dark" : "light");
   });
   applyTheme(document.body.getAttribute("data-trylle-theme") || "light");
 

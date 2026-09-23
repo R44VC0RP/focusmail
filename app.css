@@ -58,9 +58,8 @@ body { margin: 0; min-height: 100dvh; }
   --label: var(--brand);
   --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
   position: relative;
-  /* Same width as the search above it: the full row minus the theme button and the gap. */
-  flex: 0 0 calc(100% - var(--toggle) - 8px);
-  transition: flex-basis var(--toolbar-ease), height var(--toolbar-ease), scale 120ms var(--ease-out);
+  flex: 1 0 100%; /* its own row, the same width as the search above it */
+  transition: height var(--toolbar-ease), scale 120ms var(--ease-out);
   display: flex;
   align-items: center;
   height: 38px;
@@ -259,16 +258,6 @@ body { margin: 0; min-height: 100dvh; }
 
 .search { flex: 1; min-height: 40px; cursor: text; transition: min-height var(--toolbar-ease), box-shadow 180ms var(--ease-out); }
 .toolbar[data-compact] .search { min-height: 34px; }
-/* One size for the theme button, shared with the beacon's width so the search and the
-   beacon always end at the same edge. */
-.toolbar { --toggle: 36px; }
-.toolbar[data-compact] { --toggle: 34px; }
-#theme-toggle {
-  width: var(--toggle);
-  height: var(--toggle);
-  min-height: var(--toggle);
-  transition: width var(--toolbar-ease), height var(--toolbar-ease), min-height var(--toolbar-ease);
-}
 /* Hover: the faintest hint of the focus hairline, so the bar feels touchable. */
 .search.tl-input-group:hover:not(:focus-within) {
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent), var(--overview-metric-card-shadow);
@@ -824,9 +813,6 @@ html:has(.stage[data-behind]) { overflow: hidden; }
   .toolbar[data-compact] { padding-top: 6px; padding-bottom: 6px; margin-bottom: 12px; }
   .search { min-height: 44px; }
   .toolbar[data-compact] .search { min-height: 40px; }
-  /* Phones keep the theme's 44px-wide touch target; compact only slims its height. */
-  .toolbar, .toolbar[data-compact] { --toggle: 44px; }
-  .toolbar[data-compact] #theme-toggle { height: 40px; min-height: 40px; }
   .toolbar[data-compact]:has(.beacon:not([hidden])) { margin-bottom: 16px; }
   .search .tl-kbd { display: none; }
   .mail { padding: 14px 12px; }
