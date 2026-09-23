@@ -249,6 +249,20 @@ body { margin: 0; min-height: 100dvh; }
   outline: none;
 }
 [data-trylle-theme="dark"] .reader { box-shadow: var(--ff-shadow-4), 0 24px 56px -20px #000000a6; }
+/* The card's contents scroll inside it, up to the height set in placeReader. The
+   negative margin reaches out over the card's padding so the tube and its glow,
+   which sit in that padding, aren't clipped by the scroll box. */
+.reader-content {
+  max-height: var(--reader-max, none);
+  margin: -22px -24px -20px -27px;
+  padding: 22px 24px 20px 27px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.reader-content::-webkit-scrollbar { display: none; }
+/* While a card is open the page behind it doesn't scroll, so the card stays put. */
+html:has(.stage[data-behind]) { overflow: hidden; }
 .reader-surface {
   position: absolute;
   inset: 0;
@@ -605,5 +619,6 @@ body { margin: 0; min-height: 100dvh; }
   .compose-sheet { font-size: 16px; }
   .compose-body { min-height: 200px; }
   .reader { left: -4px; right: -4px; padding: 18px 16px 16px 27px; border-radius: 12px; }
+  .reader-content { margin: -18px -16px -16px -27px; padding: 18px 16px 16px 27px; }
   .reader-body p { max-width: none; }
 }

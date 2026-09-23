@@ -443,7 +443,13 @@
     const wrapTop = stageWrap.getBoundingClientRect().top;
     const top = toolbar.getBoundingClientRect().bottom + 8;
     reader.style.top = `${Math.max(0, Math.round(top - wrapTop))}px`;
+    // The page is locked while the card is open, so a long email scrolls inside
+    // the card instead, which stops 16px short of the bottom of the window.
+    reader.style.setProperty("--reader-max", `${Math.max(160, Math.round(window.innerHeight - top - 16))}px`);
   }
+  window.addEventListener("resize", () => { if (!reader.hidden && !morph) placeReader(); });
+  // Morphs measure the card's header, so it must be scrolled back to the top first.
+  const rewindReader = () => { const c = reader.querySelector(".reader-content"); if (c) c.scrollTop = 0; };
 
   // A computed color with its alpha zeroed, so it can be interpolated in and out.
   const clear = (c) => {
@@ -608,6 +614,7 @@
     if (!open || morph) return;
     const m = open;
     open = null;
+    rewindReader();
     const li = hiddenRow && hiddenRow.isConnected ? hiddenRow : rowFor(m);
 
     const finish = () => {
@@ -981,6 +988,7 @@
 
   async function closeCompose({ discard = false, sent = false } = {}) {
     if (!composing || morph) return;
+    rewindReader();
     const values = composeValues();
     const hasContent = !sent && !discard && Object.values(values).some(Boolean);
     draft = discard || sent ? { to: "", subject: "", body: "" } : values;
