@@ -112,6 +112,9 @@ body { margin: 0; min-height: 100dvh; }
 [data-trylle-theme="dark"] .mail:focus-visible::after,
 [data-trylle-theme="dark"] .mail[data-lift]::after,
 [data-trylle-theme="dark"] .reader-head::after { --a: .5; }
+/* Compose has no category yet: the same brand hue, lit low rather than at full "open" strength. */
+.reader:has(.compose) .reader-head::after { --a: .1; }
+[data-trylle-theme="dark"] .reader:has(.compose) .reader-head::after { --a: .18; }
 
 /* Category tag: vertical text that slides out from behind the bar on hover.
    The wrapper's right edge sits at the bar, and clips only horizontally. */
@@ -391,6 +394,10 @@ body { margin: 0; min-height: 100dvh; }
 [data-trylle-theme="dark"] .mail-bar::before {
   background: color-mix(in oklab, var(--label) 40%, white);
   box-shadow: 0 0 1px 0 var(--label), 0 0 3px 0 var(--label);
+}
+.reader:has(.compose) .mail-bar::before {
+  background: color-mix(in oklab, var(--label) 55%, var(--muted-foreground));
+  box-shadow: 0 0 2px 0 color-mix(in oklab, var(--label) 45%, transparent);
 }
 .mail-bar:hover::before, .mail-bar:focus-visible::before { left: 5.5px; width: 4px; }
 .mail-bar:focus-visible { outline-offset: -2px; border-radius: 6px; }
