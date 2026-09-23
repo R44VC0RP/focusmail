@@ -49,6 +49,108 @@ body { margin: 0; min-height: 100dvh; }
   pointer-events: none;
   transition: opacity var(--toolbar-ease);
 }
+.toolbar { flex-wrap: wrap; }
+
+/* Verification code bar: a full-width row under the search, lit like a mail row
+   (tube + glow in the email's label colour). Enter copies when nothing has focus. */
+.code-bar {
+  --label: var(--brand);
+  position: relative;
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding-right: 4px;
+  border-radius: 10px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--surface-3);
+  box-shadow: var(--overview-metric-card-shadow);
+  animation: code-in 320ms var(--ease-out);
+}
+[data-trylle-theme="dark"] .code-bar { background: var(--ff-surface-3); box-shadow: var(--ff-shadow-3); }
+.code-bar[hidden] { display: none; }
+.code-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--label) 16%, transparent),
+    color-mix(in oklab, var(--label) 5%, transparent) 90px,
+    transparent 240px);
+}
+[data-trylle-theme="dark"] .code-bar::before {
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--label) 26%, transparent),
+    color-mix(in oklab, var(--label) 8%, transparent) 90px,
+    transparent 240px);
+}
+@keyframes code-in { from { opacity: 0; transform: translateY(-4px); } }
+.code-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 10px 0 12px;
+  border: 0;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.code-tube {
+  flex: none;
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--label) 78%, white);
+  box-shadow: 0 0 1px 0 var(--label), 0 0 4px 0 color-mix(in oklab, var(--label) 70%, transparent);
+}
+[data-trylle-theme="dark"] .code-tube { background: color-mix(in oklab, var(--label) 40%, white); box-shadow: 0 0 1px 0 var(--label), 0 0 6px 0 var(--label); }
+.code-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
+.code-value {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+}
+.code-hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  transition: color 150ms var(--ease-in-out);
+}
+.code-hint .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
+.code-copy:hover .code-hint { color: var(--foreground); }
+.code-bar[data-copied] .code-hint { color: var(--brand); font-weight: 500; }
+.code-dismiss {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 150ms var(--ease-in-out), color 150ms var(--ease-in-out);
+}
+.code-dismiss:hover { background: var(--accent); color: var(--foreground); }
+.code-dismiss .tl-icon { width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) { .code-bar { animation: none; } }
+
 .toolbar[data-compact] { padding-top: 8px; padding-bottom: 8px; margin-bottom: 18px; }
 .toolbar[data-compact]::after { opacity: 1; }
 

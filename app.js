@@ -16,6 +16,7 @@
     Travel: "var(--color-teal-400)",
     Receipts: "var(--color-orange-500)",
     Urgent: "var(--color-red-500)",
+    Security: "var(--color-fuchsia-500)",
     Sent: "var(--brand)",
   };
   const ME = "you@embox.email";
@@ -1135,6 +1136,7 @@
     msgs.forEach((m) => { m.archived = toArchive; });
     lis.forEach((li) => li.remove());
     save();
+    updateCodeBar();
     updateCount(currentFilter());
     const remaining = list.querySelectorAll(".mail");
     if (!remaining.length) { empty.hidden = false; empty.textContent = emptyText(); }
@@ -1255,6 +1257,7 @@
     updateCount(f);
     updateFilters(f);
     updateViews();
+    updateCodeBar();
   }
 
   function setQuery(q) {
@@ -1284,6 +1287,126 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) pointerAway(); });
   document.addEventListener("mousemove", pointerBack, { passive: true });
   document.addEventListener("pointerdown", pointerBack);
+
+  /* ---------- verification codes ---------- */
+
+  // A recent email carrying a sign-in code shows in a bar under the search.
+  // Enter copies it when nothing else has focus; Esc dismisses it.
+  const codeBar = $("#code-bar");
+  const codeCopy = $("#code-copy");
+  const CODE_WINDOW = 10 * 60 * 1000; // codes older than this have usually expired
+  const CODE_HINT = /\b(code|verification|verify|passcode|one[- ]time|otp|2fa|sign[- ]?in|log[- ]?in)\b/i;
+  const CODE_TOKEN = /(?<![\w$#•.,-])(\d{3,4}[ -]\d{3,4}|\d{4,8})(?![\w%]|[.,]\d)/;
+  const codesDone = new Set(); // ids copied or dismissed
+  let codeMail = null;
+  let codeTimer = 0;
+
+  function findCode(m) {
+    const text = `${m.subject}\n${m.body.join("\n")}`;
+    if (!CODE_HINT.test(text)) return null;
+    const hit = text.match(CODE_TOKEN);
+    if (!hit) return null;
+    const value = hit[1].replace(/\D/g, "");
+    return { value, display: value.length === 6 ? `${value.slice(0, 3)} ${value.slice(3)}` : value };
+  }
+
+  const nothingFocused = () => !document.activeElement || document.activeElement === document.body;
+  const coarse = matchMedia("(pointer: coarse)");
+
+  function syncCodeHint() {
+    if (codeBar.hidden || codeBar.hasAttribute("data-copied")) return;
+    const hint = codeBar.querySelector(".code-hint");
+    if (nothingFocused() && !coarse.matches) {
+      hint.replaceChildren(el("kbd", "tl-kbd", "↩"), document.createTextNode("Copy"));
+    } else {
+      hint.textContent = coarse.matches ? "Tap to copy" : "Click to copy";
+    }
+  }
+
+  function updateCodeBar() {
+    const cutoff = Date.now() - CODE_WINDOW;
+    const next = MAIL.find((m) => !m.sent && !m.archived && !codesDone.has(m.id) && m.at.getTime() > cutoff && findCode(m)) || null;
+    if (next === codeMail) return;
+    const wasHidden = codeBar.hidden;
+    codeMail = next;
+    clearTimeout(codeTimer);
+    if (next) {
+      const code = findCode(next);
+      codeBar.style.setProperty("--label", LABELS[next.label] || "var(--brand)");
+      codeBar.querySelector(".code-from").textContent = `${next.from} code`;
+      codeBar.querySelector(".code-value").textContent = code.display;
+      codeCopy.setAttribute("aria-label", `Copy ${next.from} code ${code.display}`);
+      codeBar.removeAttribute("data-copied");
+      codeBar.hidden = false;
+      syncCodeHint();
+      // Hide it again once the code has most likely expired.
+      codeTimer = setTimeout(updateCodeBar, next.at.getTime() + CODE_WINDOW - Date.now() + 50);
+    } else {
+      codeBar.hidden = true;
+    }
+    // The toolbar changed height: keep an open card tucked under it.
+    if (wasHidden !== codeBar.hidden && !reader.hidden && !morph) placeReader();
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const ta = el("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+      document.body.append(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    }
+  }
+
+  async function copyCode() {
+    const m = codeMail;
+    if (!m || codeBar.hasAttribute("data-copied")) return;
+    const code = findCode(m);
+    if (!(await copyText(code.value))) { showToast("Couldn't copy the code"); return; }
+    codesDone.add(m.id);
+    codeBar.dataset.copied = "";
+    codeBar.querySelector(".code-hint").textContent = "Copied";
+    setTimeout(() => { if (codeMail === m) updateCodeBar(); }, 1400);
+  }
+
+  function dismissCode() {
+    if (!codeMail) return;
+    codesDone.add(codeMail.id);
+    updateCodeBar();
+  }
+
+  codeCopy.addEventListener("click", copyCode);
+  $("#code-dismiss").addEventListener("click", dismissCode);
+  document.addEventListener("focusin", syncCodeHint);
+  document.addEventListener("focusout", () => setTimeout(syncCodeHint));
+
+  // Demo: a sign-in code arrives a few seconds after the page loads, as if it had just come in.
+  setTimeout(() => {
+    if (MAIL.some((m) => m.id === "demo-code")) return;
+    MAIL.unshift({
+      id: "demo-code", from: "Vercel", subject: "Your Vercel sign-in code", label: "Security",
+      at: new Date(), unread: true, archived: false, sent: false,
+      snippet: "Your verification code is 482 913. It expires in 10 minutes.",
+      body: [
+        "Your verification code is 482913.",
+        "It expires in 10 minutes. If you didn't try to sign in, you can ignore this email.",
+      ],
+    });
+    refreshList();
+    const li = rowFor(MAIL[0]);
+    if (li && !reduceMotion()) {
+      li.animate(
+        [{ opacity: 0, transform: "translateY(-6px)", filter: "blur(4px)" }, { opacity: 1, transform: "none", filter: "blur(0px)" }],
+        { duration: 320, easing: EASE_OUT },
+      );
+    }
+  }, 3000);
 
   /* ---------- compact toolbar ---------- */
 
@@ -1377,6 +1500,12 @@
     if (e.key === "Escape" && selected.size) {
       e.preventDefault();
       clearSelection();
+    } else if (e.key === "Enter" && codeMail && nothingFocused()) {
+      e.preventDefault();
+      copyCode();
+    } else if (e.key === "Escape" && codeMail && nothingFocused()) {
+      e.preventDefault();
+      dismissCode();
     } else if (e.key === "Enter" && idx >= 0) {
       e.preventDefault();
       openMail(mailFor(rows[idx]));
