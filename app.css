@@ -303,11 +303,11 @@ body { margin: 0; min-height: 100dvh; }
   padding-top: 14px;
   border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
-.compose-sheet { display: grid; font-size: 14px; line-height: 1.5; }
-.compose-line { display: flex; align-items: baseline; gap: 6px; min-height: 28px; padding: 3px 0; cursor: text; }
+.compose-sheet { display: grid; gap: 8px; font-size: 14px; line-height: 1.5; }
+.compose-line { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; cursor: text; }
 .compose-label { flex: none; color: var(--muted-foreground); font-weight: 500; }
 /* To: typed straight after the colon. Subject: a placeholder line, no label, set like a subject. */
-.compose-subject { margin-top: 14px; font-weight: 600; }
+.compose-subject { font-weight: 600; }
 .compose-subject .compose-input::placeholder { font-weight: 600; }
 .compose-input, .compose-body {
   flex: 1;
@@ -325,7 +325,8 @@ body { margin: 0; min-height: 100dvh; }
   display: block;
   width: 100%;
   min-height: 140px;
-  margin-top: 2px;
+  /* Match the header lines' 3px padding, less the body's extra half-leading. */
+  padding-top: calc(3px - 0.05em);
   line-height: 1.6;
   field-sizing: content;
 }
