@@ -52,9 +52,11 @@ body { margin: 0; min-height: 100dvh; }
 .toolbar { flex-wrap: wrap; }
 
 /* Verification code bar: a full-width row under the search, lit like a mail row
-   (tube + glow in the email's label colour). Enter copies when nothing has focus. */
+   (tube + glow in the email's label colour). Enter copies when nothing has focus.
+   Its height opens and closes from app.js; everything inside is choreographed here. */
 .code-bar {
   --label: var(--brand);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
   position: relative;
   flex: 1 0 100%;
   display: flex;
@@ -66,19 +68,27 @@ body { margin: 0; min-height: 100dvh; }
   isolation: isolate;
   background: var(--surface-3);
   box-shadow: var(--overview-metric-card-shadow);
-  animation: code-in 320ms var(--ease-out);
+  transition: height var(--toolbar-ease), scale 120ms var(--ease-out);
 }
 [data-trylle-theme="dark"] .code-bar { background: var(--ff-surface-3); box-shadow: var(--ff-shadow-3); }
 .code-bar[hidden] { display: none; }
+.toolbar[data-compact] .code-bar { height: 34px; }
+/* Pressing anywhere on it gives a hair of give. */
+.code-bar:has(.code-copy:active) { scale: .996; }
+
+/* Glow off the tube: fades in on arrival, brightens on hover and when copied. */
 .code-bar::before {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   background: linear-gradient(90deg,
     color-mix(in oklab, var(--label) 16%, transparent),
     color-mix(in oklab, var(--label) 5%, transparent) 90px,
     transparent 240px);
+  opacity: .8;
+  animation: code-glow-in 520ms 60ms var(--ease-out) backwards;
+  transition: opacity 220ms var(--ease-out);
 }
 [data-trylle-theme="dark"] .code-bar::before {
   background: linear-gradient(90deg,
@@ -86,7 +96,23 @@ body { margin: 0; min-height: 100dvh; }
     color-mix(in oklab, var(--label) 8%, transparent) 90px,
     transparent 240px);
 }
-@keyframes code-in { from { opacity: 0; transform: translateY(-4px); } }
+.code-bar:has(.code-copy:hover)::before, .code-bar[data-copied]::before { opacity: 1; }
+
+/* Copy: a band of light sweeps across, left to right, once. */
+.code-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in oklab, var(--label) 22%, transparent) 50%, transparent 65%);
+  translate: -100% 0;
+  pointer-events: none;
+}
+[data-trylle-theme="dark"] .code-bar::after {
+  background: linear-gradient(100deg, transparent 35%, color-mix(in oklab, color-mix(in oklab, var(--label) 50%, white) 22%, transparent) 50%, transparent 65%);
+}
+.code-bar[data-copied]::after { animation: code-sheen 720ms var(--ease-out); }
+
 .code-copy {
   display: flex;
   flex: 1;
@@ -103,6 +129,9 @@ body { margin: 0; min-height: 100dvh; }
   text-align: left;
   cursor: pointer;
 }
+[data-trylle-theme] .code-copy:focus-visible { outline-offset: -3px; border-radius: 9px; }
+
+/* The tube lights from its middle outward, then flares white on copy. */
 .code-tube {
   flex: none;
   width: 3px;
@@ -110,17 +139,34 @@ body { margin: 0; min-height: 100dvh; }
   border-radius: 999px;
   background: color-mix(in oklab, var(--label) 78%, white);
   box-shadow: 0 0 1px 0 var(--label), 0 0 4px 0 color-mix(in oklab, var(--label) 70%, transparent);
+  animation: code-tube-in 420ms 40ms var(--ease-spring) backwards;
 }
 [data-trylle-theme="dark"] .code-tube { background: color-mix(in oklab, var(--label) 40%, white); box-shadow: 0 0 1px 0 var(--label), 0 0 6px 0 var(--label); }
+.code-bar[data-copied] .code-tube { animation: code-flare 900ms var(--ease-out); }
+
 .code-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
+.code-from strong { color: var(--foreground); font-weight: 500; }
 .code-value {
+  display: inline-flex;
   flex: none;
+  gap: .38em;
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
   font-variant-numeric: tabular-nums;
+  transition: scale 120ms var(--ease-out), color 200ms var(--ease-out);
 }
+.code-copy:active .code-value { scale: .97; }
+.code-bar[data-copied] .code-value { animation: code-pop 420ms var(--ease-spring); }
+
+/* Arrival: content follows the tube in a short stagger, rising 3px. */
+.code-from, .code-value, .code-hint, .code-dismiss { animation: code-rise 360ms var(--ease-out) backwards; }
+.code-from { animation-delay: 90ms; }
+.code-value { animation-delay: 130ms; }
+.code-hint { animation-delay: 190ms; }
+.code-dismiss { animation-delay: 220ms; }
+
 .code-hint {
   display: inline-flex;
   flex: none;
@@ -131,9 +177,23 @@ body { margin: 0; min-height: 100dvh; }
   font-size: 12px;
   transition: color 150ms var(--ease-in-out);
 }
-.code-hint .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
+.code-hint .tl-kbd {
+  padding: 0 5px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent), 0 1px 0 color-mix(in oklab, var(--border) 70%, transparent);
+  transition: translate 90ms var(--ease-out), box-shadow 90ms var(--ease-out), color 150ms;
+}
+/* Enter: the key visibly goes down before the confirmation replaces it. */
+.code-bar[data-pressing] .code-hint .tl-kbd {
+  translate: 0 1px;
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 30%, transparent), 0 0 0 transparent;
+}
 .code-copy:hover .code-hint { color: var(--foreground); }
-.code-bar[data-copied] .code-hint { color: var(--brand); font-weight: 500; }
+.code-bar[data-copied] .code-hint { color: var(--brand); font-weight: 500; animation: code-rise 260ms var(--ease-out) backwards; }
+/* The check draws itself (its path is ~20 units long). */
+.code-hint .tl-icon { width: 14px; height: 14px; stroke-width: 2; stroke-dasharray: 20; animation: code-check 380ms 60ms var(--ease-out) backwards; }
+
 .code-dismiss {
   display: grid;
   flex: none;
@@ -145,14 +205,47 @@ body { margin: 0; min-height: 100dvh; }
   background: none;
   color: var(--muted-foreground);
   cursor: pointer;
-  transition: background-color 150ms var(--ease-in-out), color 150ms var(--ease-in-out);
+  transition: background-color 150ms var(--ease-in-out), color 150ms var(--ease-in-out), scale 120ms var(--ease-out), rotate 200ms var(--ease-out);
 }
-.code-dismiss:hover { background: var(--accent); color: var(--foreground); }
+.code-dismiss:hover { background: var(--accent); color: var(--foreground); rotate: 90deg; }
+.code-dismiss:active { scale: .9; }
 .code-dismiss .tl-icon { width: 14px; height: 14px; }
-@media (prefers-reduced-motion: reduce) { .code-bar { animation: none; } }
+
+/* Time left: a hairline along the bottom that drains over the code's 10 minutes. */
+.code-life {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--label) 70%, transparent), color-mix(in oklab, var(--label) 20%, transparent));
+  transform-origin: left;
+  opacity: .8;
+  pointer-events: none;
+}
+
+@keyframes code-glow-in { from { opacity: 0; } }
+@keyframes code-tube-in { from { transform: scaleY(0); opacity: 0; } }
+@keyframes code-rise { from { opacity: 0; translate: 0 3px; } }
+@keyframes code-sheen { from { translate: -100% 0; } to { translate: 100% 0; } }
+@keyframes code-pop { 40% { scale: 1.05; } }
+@keyframes code-check { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+@keyframes code-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes code-flare {
+  25% {
+    background: #fff;
+    box-shadow: 0 0 2px #fff, 0 0 8px var(--label), 0 0 18px var(--label), 6px 0 28px color-mix(in oklab, var(--label) 60%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .code-bar::before, .code-bar::after, .code-tube, .code-from, .code-value, .code-hint, .code-dismiss,
+  .code-bar[data-copied] .code-tube, .code-bar[data-copied] .code-value, .code-bar[data-copied] .code-hint, .code-hint .tl-icon { animation: none; }
+}
 
 .toolbar[data-compact] { padding-top: 8px; padding-bottom: 8px; margin-bottom: 18px; }
 .toolbar[data-compact]::after { opacity: 1; }
+/* With the code bar showing, the compact bar also takes 4px off it; the margin makes that up too. */
+.toolbar[data-compact]:has(.code-bar:not([hidden])) { margin-bottom: 22px; }
 
 .search { flex: 1; min-height: 40px; cursor: text; transition: min-height var(--toolbar-ease), box-shadow 180ms var(--ease-out); }
 .toolbar[data-compact] .search { min-height: 34px; }
@@ -714,6 +807,7 @@ html:has(.stage[data-behind]) { overflow: hidden; }
   .search { min-height: 44px; }
   .toolbar[data-compact] .search { min-height: 40px; }
   .toolbar[data-compact] #theme-toggle { width: 40px; height: 40px; min-height: 40px; }
+  .toolbar[data-compact]:has(.code-bar:not([hidden])) { margin-bottom: 16px; }
   .search .tl-kbd { display: none; }
   .mail { padding: 14px 12px; }
   .mail-tag { display: none; }

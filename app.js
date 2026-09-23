@@ -1300,6 +1300,38 @@
   const codesDone = new Set(); // ids copied or dismissed
   let codeMail = null;
   let codeTimer = 0;
+  let codeAnim = null;
+
+  // The bar grows out of the toolbar (and collapses back) instead of popping,
+  // so the list below glides rather than jumps. The toolbar's row gap opens
+  // with it, so nothing snaps at either end.
+  function animateCodeBar(show) {
+    codeAnim?.forEach((a) => a.cancel());
+    codeAnim = null;
+    const settle = () => { if (!reader.hidden && !morph) placeReader(); };
+    if (show) codeBar.hidden = false;
+    if (reduceMotion()) { codeBar.hidden = !show; settle(); return; }
+    const h = codeBar.offsetHeight;
+    const timing = {
+      duration: show ? 320 : 260,
+      easing: show ? "cubic-bezier(.2, .8, .2, 1)" : "cubic-bezier(.4, 0, .2, 1)",
+      fill: "forwards", // hold the collapsed state until the bar is actually hidden
+    };
+    // Leaving, the content fades out early so it's gone before the bar squeezes it.
+    const bar = show
+      ? [{ height: "0px", opacity: 0 }, { opacity: 1, offset: 0.45 }, { height: `${h}px`, opacity: 1 }]
+      : [{ height: `${h}px`, opacity: 1 }, { opacity: 0, offset: 0.6 }, { height: "0px", opacity: 0 }];
+    const gap = [{ rowGap: "0px" }, { rowGap: "8px" }];
+    if (!show) gap.reverse();
+    const anims = [codeBar.animate(bar, timing), toolbar.animate(gap, timing)];
+    codeAnim = anims;
+    Promise.all(anims.map((a) => a.finished)).then(() => {
+      if (!show) codeBar.hidden = true;
+      anims.forEach((a) => a.cancel());
+      codeAnim = null;
+      settle();
+    }, () => {});
+  }
 
   function findCode(m) {
     const text = `${m.subject}\n${m.body.join("\n")}`;
@@ -1333,19 +1365,24 @@
     if (next) {
       const code = findCode(next);
       codeBar.style.setProperty("--label", LABELS[next.label] || "var(--brand)");
-      codeBar.querySelector(".code-from").textContent = `${next.from} code`;
-      codeBar.querySelector(".code-value").textContent = code.display;
+      const from = codeBar.querySelector(".code-from");
+      from.replaceChildren(el("strong", null, next.from), document.createTextNode(" code"));
+      // Groups sit apart by a thin gap; a monospace space would read as a hole.
+      codeBar.querySelector(".code-value").replaceChildren(...code.display.split(" ").map((g) => el("span", null, g)));
       codeCopy.setAttribute("aria-label", `Copy ${next.from} code ${code.display}`);
       codeBar.removeAttribute("data-copied");
-      codeBar.hidden = false;
+      // A hairline along the bottom drains as the code's 10 minutes run out.
+      const life = codeBar.querySelector(".code-life");
+      life.style.animation = "none";
+      void life.offsetWidth;
+      life.style.animation = `code-life ${CODE_WINDOW}ms linear ${next.at.getTime() - Date.now()}ms forwards`;
+      if (wasHidden) animateCodeBar(true); else codeBar.hidden = false;
       syncCodeHint();
       // Hide it again once the code has most likely expired.
       codeTimer = setTimeout(updateCodeBar, next.at.getTime() + CODE_WINDOW - Date.now() + 50);
-    } else {
-      codeBar.hidden = true;
+    } else if (!wasHidden) {
+      animateCodeBar(false);
     }
-    // The toolbar changed height: keep an open card tucked under it.
-    if (wasHidden !== codeBar.hidden && !reader.hidden && !morph) placeReader();
   }
 
   async function copyText(text) {
@@ -1364,15 +1401,22 @@
     }
   }
 
-  async function copyCode() {
+  async function copyCode({ fromKey = false } = {}) {
     const m = codeMail;
-    if (!m || codeBar.hasAttribute("data-copied")) return;
+    if (!m || codeBar.hasAttribute("data-copied") || codeBar.hasAttribute("data-pressing")) return;
     const code = findCode(m);
-    if (!(await copyText(code.value))) { showToast("Couldn't copy the code"); return; }
+    // From the keyboard, let the ↩ key visibly go down before it turns into the confirmation.
+    if (fromKey && !reduceMotion()) codeBar.dataset.pressing = "";
+    const [ok] = await Promise.all([copyText(code.value), new Promise((r) => setTimeout(r, fromKey ? 110 : 0))]);
+    delete codeBar.dataset.pressing;
+    if (!ok) { showToast("Couldn't copy the code"); return; }
     codesDone.add(m.id);
-    codeBar.dataset.copied = "";
-    codeBar.querySelector(".code-hint").textContent = "Copied";
-    setTimeout(() => { if (codeMail === m) updateCodeBar(); }, 1400);
+    codeBar.dataset.copied = ""; // the tube flares and a sheen crosses the bar
+    const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    check.setAttribute("class", "tl-icon");
+    check.innerHTML = '<use href="#i-check"/>';
+    codeBar.querySelector(".code-hint").replaceChildren(check, document.createTextNode("Copied"));
+    setTimeout(() => { if (codeMail === m) updateCodeBar(); }, 1200);
   }
 
   function dismissCode() {
@@ -1381,7 +1425,7 @@
     updateCodeBar();
   }
 
-  codeCopy.addEventListener("click", copyCode);
+  codeCopy.addEventListener("click", () => copyCode());
   $("#code-dismiss").addEventListener("click", dismissCode);
   document.addEventListener("focusin", syncCodeHint);
   document.addEventListener("focusout", () => setTimeout(syncCodeHint));
@@ -1502,7 +1546,7 @@
       clearSelection();
     } else if (e.key === "Enter" && codeMail && nothingFocused()) {
       e.preventDefault();
-      copyCode();
+      copyCode({ fromKey: true });
     } else if (e.key === "Escape" && codeMail && nothingFocused()) {
       e.preventDefault();
       dismissCode();
