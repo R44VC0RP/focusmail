@@ -143,6 +143,31 @@
   let open = null; // message shown in the reader, or null in list mode
   let composing = false;
   let draft = { to: "", subject: "", body: "" };
+  const selected = new Set(); // ids of rows picked with x
+
+  /* ---------- persistence ---------- */
+
+  // Archive and read state, sent mail and the draft survive a reload.
+  const STORE = "focus-mail-state";
+  function loadState() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORE)); } catch {}
+    if (!saved || saved.v !== 1) return;
+    for (const m of MAIL) {
+      const f = saved.flags?.[m.id];
+      if (f) { m.archived = !!f.archived; m.unread = !!f.unread; }
+    }
+    for (const s of saved.sent || []) MAIL.push({ ...s, at: new Date(s.at) });
+    MAIL.sort((a, b) => b.at - a.at);
+    if (saved.draft) draft = { ...draft, ...saved.draft };
+  }
+  function save() {
+    const flags = {};
+    for (const m of MAIL) if (!m.sent) flags[m.id] = { archived: m.archived, unread: m.unread };
+    const sent = MAIL.filter((m) => m.sent).map((m) => ({ ...m, at: m.at.toISOString() }));
+    try { localStorage.setItem(STORE, JSON.stringify({ v: 1, flags, sent, draft })); } catch {}
+  }
+  loadState();
 
   const $ = (sel) => document.querySelector(sel);
   const list = $("#list");
@@ -159,6 +184,9 @@
   const stageWrap = $(".stage-wrap");
   const toolbar = $(".toolbar");
   const toast = $("#toast");
+  const toastText = toast.querySelector(".toast-text");
+  const toastUndo = $("#toast-undo");
+  const shortcuts = $("#shortcuts");
 
   const EASE_OUT = "cubic-bezier(.2, .8, .2, 1)";
   const EASE = "cubic-bezier(.4, 0, .2, 1)";
@@ -245,6 +273,7 @@
     li.dataset.id = m.id;
     li.style.setProperty("--label", LABELS[m.label] || "var(--muted-foreground)");
     if (m.unread) li.dataset.unread = "";
+    if (selected.has(m.id)) li.dataset.selected = "";
 
     const head = el("div", "mail-head");
     head.append(el("h2", "mail-subject", m.subject));
@@ -256,11 +285,56 @@
     snippet.append(el("span", "mail-from", m.sent ? `To ${m.to}` : m.from), document.createTextNode(m.snippet));
 
     li.append(tagEl(m.label), barButton(m.label), head, time, snippet);
-    li.addEventListener("click", () => openMail(m));
+    // ⌘/Ctrl/Shift-click selects; once anything is selected, a plain click does too.
+    li.addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); });
+    li.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || selected.size) toggleSelect(li);
+      else openMail(m);
+    });
     return li;
   }
 
   const rowFor = (m) => list.querySelector(`.mail[data-id="${m.id}"]`);
+  const mailFor = (li) => MAIL.find((x) => x.id === li.dataset.id);
+
+  /* ---------- selection ---------- */
+
+  function toggleSelect(li) {
+    const id = li.dataset.id;
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    li.toggleAttribute("data-selected", selected.has(id));
+    updateCount(currentFilter());
+  }
+  function selectAll() {
+    for (const li of list.querySelectorAll(".mail")) { selected.add(li.dataset.id); li.dataset.selected = ""; }
+    updateCount(currentFilter());
+  }
+  function clearSelection() {
+    selected.clear();
+    for (const li of list.querySelectorAll(".mail[data-selected]")) delete li.dataset.selected;
+    updateCount(currentFilter());
+  }
+  const selectedRows = () => [...list.querySelectorAll(".mail[data-selected]")];
+
+  /* ---------- read state ---------- */
+
+  const syncUnread = (m) => rowFor(m)?.toggleAttribute("data-unread", m.unread);
+
+  // Marks everything read if any of it is unread, otherwise marks it all unread.
+  function toggleRead(msgs) {
+    if (!msgs.length) return;
+    const before = msgs.map((m) => m.unread);
+    const unread = !before.some(Boolean);
+    const apply = (value) => {
+      msgs.forEach((m, i) => { m.unread = value === null ? before[i] : value; syncUnread(m); });
+      save();
+      updateCount(currentFilter());
+    };
+    apply(unread);
+    const n = msgs.length > 1 ? ` · ${msgs.length} messages` : "";
+    const action = pushUndo({ undo() { apply(null); showToast(`Marked ${unread ? "read" : "unread"} again`); } });
+    showToast(`Marked ${unread ? "unread" : "read"}${n}`, { undo: action });
+  }
 
   /* ---------- reader ---------- */
 
@@ -453,7 +527,7 @@
     const li = rowFor(m);
     const wasOpen = open !== null;
     open = m;
-    if (m.unread) m.unread = false;
+    if (m.unread) { m.unread = false; save(); }
 
     if (wasOpen || !li || reduceMotion()) {
       // Already reading (↑/↓), or nothing to rise from: swap content in place.
@@ -612,10 +686,11 @@
   const replyForm = () => reader.querySelector(".reply");
   const inReply = () => !!replyForm() && !replyForm().hidden;
 
-  function openReply() {
+  function openReply(text = "") {
     const form = replyForm();
     if (!form || !form.hidden) return;
     form.hidden = false;
+    form.querySelector("textarea").value = text;
     if (!reduceMotion()) {
       form.animate(
         [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }],
@@ -640,13 +715,86 @@
     reader.focus({ preventScroll: true });
   }
 
+  /* ---------- toast and undo ---------- */
+
   let toastTimer;
-  function showToast(text) {
-    toast.querySelector("span").textContent = text;
+  let toastAction = null; // the undoable action the toast's Undo button reverses
+  function showToast(text, { undo = null, duration } = {}) {
+    toastText.textContent = text;
+    toastAction = undo;
+    toastUndo.hidden = !undo;
     toast.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { toast.hidden = true; }, 2200);
+    toastTimer = setTimeout(hideToast, duration ?? (undo ? 5000 : 2200));
   }
+  function hideToast() { toast.hidden = true; toastAction = null; }
+  toastUndo.addEventListener("click", () => { if (toastAction) undoAction(toastAction); });
+
+  // Undoable actions, newest last. `z` reverses the newest one.
+  const undoStack = [];
+  function pushUndo(action) {
+    undoStack.push(action);
+    if (undoStack.length > 20) undoStack.shift();
+    return action;
+  }
+  function undoAction(action) {
+    const i = undoStack.indexOf(action);
+    if (i < 0) return;
+    undoStack.splice(i, 1);
+    if (toastAction === action) hideToast();
+    action.undo();
+  }
+  function undoLast() {
+    const action = undoStack.at(-1);
+    if (action) undoAction(action); else showToast("Nothing to undo");
+  }
+
+  // Re-render the list behind whatever is open, keeping keyboard focus and the open row hidden.
+  function refreshList() {
+    if (morph) { morph.then(() => refreshList()); return; }
+    const focusedId = document.activeElement?.closest?.("#list .mail")?.dataset.id;
+    render();
+    if (open) {
+      hiddenRow = rowFor(open);
+      if (hiddenRow) hiddenRow.style.visibility = "hidden";
+    }
+    if (focusedId) list.querySelector(`.mail[data-id="${focusedId}"]`)?.focus({ preventScroll: true });
+  }
+
+  // Sending waits a few seconds so it can be taken back. Opening a new message
+  // or leaving the page sends anything still waiting.
+  const SEND_DELAY = 5000;
+  const pendingSends = new Set();
+  function queueSend(m, { sending, sent, restore }) {
+    const action = {
+      undo() {
+        clearTimeout(action.timer);
+        pendingSends.delete(action);
+        restore();
+      },
+      commit() {
+        clearTimeout(action.timer);
+        pendingSends.delete(action);
+        const i = undoStack.indexOf(action);
+        if (i >= 0) undoStack.splice(i, 1);
+        MAIL.unshift(m);
+        save();
+        if (view.has(m)) refreshList(); else updateCount(currentFilter());
+        if (toastAction === action) showToast(sent);
+      },
+    };
+    action.timer = setTimeout(action.commit, SEND_DELAY);
+    pendingSends.add(action);
+    pushUndo(action);
+    showToast(sending, { undo: action, duration: SEND_DELAY + 500 });
+  }
+  const flushSends = () => [...pendingSends].forEach((a) => a.commit());
+  window.addEventListener("pagehide", flushSends);
+
+  const plain = (text) => ({
+    snippet: text.replace(/\s+/g, " ").slice(0, 160),
+    body: text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean),
+  });
 
   async function sendReply() {
     const form = replyForm();
@@ -654,7 +802,20 @@
     if (!text) { form.querySelector("textarea").focus(); return; }
     const m = open;
     await closeReply();
-    showToast(`Reply sent to ${m.from}`);
+    const reply = {
+      id: `s${Date.now()}`, from: "You", to: m.from, label: "Sent", at: new Date(),
+      subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`,
+      unread: false, archived: false, sent: true, ...plain(text),
+    };
+    queueSend(reply, {
+      sending: `Sending reply to ${m.from}…`,
+      sent: `Reply sent to ${m.from}`,
+      async restore() {
+        if (morph) await morph;
+        if (open !== m) await openMail(m);
+        openReply(text);
+      },
+    });
   }
 
   /* ---------- compose ---------- */
@@ -732,7 +893,11 @@
     form.append(sheet, error, actions);
     form.addEventListener("submit", (e) => { e.preventDefault(); sendCompose(); });
     if (draft.subject) title.textContent = draft.subject;
-    form.addEventListener("input", () => { error.hidden = true; });
+    form.addEventListener("input", () => {
+      error.hidden = true;
+      draft = composeValues(); // a reload mid-sentence keeps the draft
+      save();
+    });
 
     const content = el("div", "reader-content");
     content.append(head, form);
@@ -750,6 +915,7 @@
 
   async function openCompose() {
     if (composing || morph) return;
+    flushSends();
     composing = true;
 
     if (open) {
@@ -818,6 +984,7 @@
     const values = composeValues();
     const hasContent = !sent && !discard && Object.values(values).some(Boolean);
     draft = discard || sent ? { to: "", subject: "", body: "" } : values;
+    save();
     composing = false;
 
     const finish = () => {
@@ -879,7 +1046,18 @@
     }
 
     if (hasContent) showToast("Draft saved · press c to resume");
-    else if (discard && Object.values(values).some(Boolean)) showToast("Draft discarded");
+    else if (discard && Object.values(values).some(Boolean)) {
+      const action = pushUndo({
+        async undo() {
+          if (morph) await morph;
+          if (composing) return;
+          draft = values;
+          save();
+          openCompose();
+        },
+      });
+      showToast("Draft discarded", { undo: action });
+    }
     (list.querySelector(".mail") || search).focus({ preventScroll: true });
   }
 
@@ -892,52 +1070,94 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.to) && !/^[A-Za-z][\w' -]{0,40}$/.test(values.to)) return fail("to", "That doesn't look like an address or a name.");
     if (!values.body) return fail("body", "Write something first.");
     const to = values.to.includes("@") ? values.to.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : values.to;
-    MAIL.unshift({
+    const m = {
       id: `s${Date.now()}`, from: "You", to, subject: values.subject || "(no subject)", label: "Sent", at: new Date(),
-      unread: false, archived: false, sent: true,
-      snippet: values.body.replace(/\s+/g, " ").slice(0, 160),
-      body: values.body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean),
-    });
-    closeCompose({ sent: true }).then(() => showToast(`Sent to ${to}`));
+      unread: false, archived: false, sent: true, ...plain(values.body),
+    };
+    closeCompose({ sent: true }).then(() => queueSend(m, {
+      sending: `Sending to ${to}…`,
+      sent: `Sent to ${to}`,
+      async restore() {
+        draft = values;
+        save();
+        if (morph) await morph;
+        openCompose();
+      },
+    }));
   }
 
   /* ---------- archive ---------- */
 
-  async function archive(li) {
-    if (li.dataset.archiving) return;
-    li.dataset.archiving = "";
-    const m = MAIL.find((x) => x.id === li.dataset.id);
-    const hadFocus = document.activeElement === li;
+  function recede(li, delay = 0) {
+    const h = li.offsetHeight;
+    const cs = getComputedStyle(li);
+    const away = li.animate(
+      [
+        { transform: "perspective(900px) translateZ(0)", filter: "blur(0px)", opacity: 1 },
+        { transform: "perspective(900px) translateZ(-180px)", filter: "blur(12px)", opacity: 0 },
+      ],
+      { duration: 336, delay, easing: EASE, fill: "forwards" },
+    );
+    const collapse = li.animate(
+      [
+        { height: `${h}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom },
+        { height: "0px", paddingTop: "0px", paddingBottom: "0px" },
+      ],
+      { duration: 264, delay: delay + 96, easing: EASE, fill: "forwards" },
+    );
+    return Promise.all([away.finished, collapse.finished]);
+  }
+
+  // `e` in Archive moves mail back to the inbox; everywhere else it archives.
+  async function archiveRows(lis) {
+    lis = lis.filter((li) => li.isConnected && !li.dataset.archiving);
+    if (!lis.length) return;
     const rows = [...list.querySelectorAll(".mail")];
-    const idx = rows.indexOf(li);
+    const focusIdx = rows.indexOf(document.activeElement);
+    const hadFocus = focusIdx >= 0 && lis.includes(rows[focusIdx]);
+    const msgs = lis.map(mailFor);
+    const toArchive = !msgs[0].archived;
+    for (const li of lis) { li.dataset.archiving = ""; selected.delete(li.dataset.id); }
 
     if (!reduceMotion()) {
-      const h = li.offsetHeight;
       await new Promise((r) => setTimeout(r, 120)); // let the tube flare
-      const recede = li.animate(
-        [
-          { transform: "perspective(900px) translateZ(0)", filter: "blur(0px)", opacity: 1 },
-          { transform: "perspective(900px) translateZ(-180px)", filter: "blur(12px)", opacity: 0 },
-        ],
-        { duration: 336, easing: EASE, fill: "forwards" },
-      );
-      const collapse = li.animate(
-        [
-          { height: `${h}px`, paddingTop: "12px", paddingBottom: "12px" },
-          { height: "0px", paddingTop: "0px", paddingBottom: "0px" },
-        ],
-        { duration: 264, delay: 96, easing: EASE, fill: "forwards" },
-      );
-      await Promise.all([recede.finished, collapse.finished]);
+      await Promise.all(lis.map((li, i) => recede(li, Math.min(i, 8) * 28)));
     }
 
-    m.archived = !m.archived; // `e` in Archive moves it back to the inbox
-    li.remove();
+    msgs.forEach((m) => { m.archived = toArchive; });
+    lis.forEach((li) => li.remove());
+    save();
     updateCount(currentFilter());
     const remaining = list.querySelectorAll(".mail");
     if (!remaining.length) { empty.hidden = false; empty.textContent = emptyText(); }
-    if (hadFocus) (remaining[Math.min(idx, remaining.length - 1)] || search).focus({ preventScroll: true });
+    if (hadFocus) {
+      // The next row that survived, else the nearest one above.
+      const next = rows.slice(focusIdx + 1).find((r) => r.isConnected) || rows.slice(0, focusIdx).reverse().find((r) => r.isConnected);
+      (next || search).focus({ preventScroll: true });
+    }
+
+    const n = msgs.length;
+    const home = msgs.every((m) => m.sent) ? "Sent" : "Inbox";
+    const did = toArchive ? (n > 1 ? `Archived ${n} messages` : "Archived") : (n > 1 ? `Moved ${n} messages to ${home}` : `Moved to ${home}`);
+    const action = pushUndo({
+      undo() {
+        msgs.forEach((m) => { m.archived = !toArchive; });
+        save();
+        refreshList();
+        const back = msgs.map(rowFor).filter(Boolean);
+        if (!reduceMotion()) {
+          back.forEach((li) => li.animate(
+            [{ opacity: 0, transform: "translateY(-6px)", filter: "blur(4px)" }, { opacity: 1, transform: "none", filter: "blur(0px)" }],
+            { duration: 260, easing: EASE_OUT },
+          ));
+        }
+        if (!open && !composing && back[0]) back[0].focus({ preventScroll: true });
+        showToast(toArchive ? "Archive undone" : "Moved back to Archive");
+      },
+    });
+    showToast(did, { undo: action });
   }
+  const archive = (li) => archiveRows([li]);
 
   async function archiveOpen() {
     const m = open;
@@ -953,13 +1173,22 @@
     return q ? `No mail matches “${q}”` : view.empty;
   }
 
+  const hint = (key, what) => {
+    const s = el("span", "meta-hint");
+    s.append(el("kbd", "tl-kbd", key), document.createTextNode(what));
+    return s;
+  };
+
   function updateCount(f) {
-    const all = inView();
-    const visible = all.filter((m) => matches(m, f));
-    const unread = view.id === "inbox" ? visible.filter((m) => m.unread).length : 0;
-    const noun = visible.length === 1 ? "message" : "messages";
-    const scope = f.text.length || f.label || f.unread ? `${visible.length} of ${all.length}` : `${visible.length} ${noun}`;
-    count.textContent = unread ? `${scope} · ${unread} unread` : scope;
+    if (selected.size) {
+      count.replaceChildren(
+        el("strong", "count-selected", `${selected.size} selected`),
+        hint("e", view.id === "archive" ? "Move out" : "Archive"), hint("u", "Read"), hint("esc", "Clear"),
+      );
+      return;
+    }
+    // Outside a selection the right side stays quiet: just the "c New" hint.
+    count.replaceChildren();
   }
 
   function updateFilters(f) {
@@ -1009,6 +1238,8 @@
   function render() {
     const f = currentFilter();
     const visible = inView().filter((m) => matches(m, f));
+    // Selection only covers rows you can see.
+    for (const id of selected) if (!visible.some((m) => m.id === id)) selected.delete(id);
     list.replaceChildren(...visible.map(row));
     list.hidden = false;
     empty.hidden = visible.length > 0;
@@ -1028,7 +1259,7 @@
 
   // Clicking anywhere in the blurred space behind the card closes it.
   document.addEventListener("pointerdown", (e) => {
-    if ((!open && !composing) || morph) return;
+    if ((!open && !composing) || morph || shortcuts.open) return;
     if (reader.contains(e.target) || toolbar.contains(e.target) || toast.contains(e.target)) return;
     if (composing) closeCompose(); else closeReader();
   });
@@ -1065,6 +1296,12 @@
   document.addEventListener("keydown", (e) => {
     const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
 
+    // The shortcut sheet is modal: it closes itself on Escape, and ? toggles it.
+    if (shortcuts.open) {
+      if (e.key === "?") { e.preventDefault(); shortcuts.close(); }
+      return;
+    }
+
     // Reply mode: the textarea owns the keyboard.
     if (open && inReply()) {
       if (e.key === "Escape") { e.preventDefault(); closeReply(); }
@@ -1080,11 +1317,22 @@
     }
 
     if (inField) return;
+    const mod = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
+    if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); undoLast(); return; }
+    if (mod && e.key.toLowerCase() === "a" && !open) { e.preventDefault(); selectAll(); return; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "?") {
+      e.preventDefault();
+      shortcuts.showModal();
+      shortcuts.focus(); // the sheet, not its close button, so no focus ring greets you
+      return;
+    }
+    if (e.key === "z") { e.preventDefault(); undoLast(); return; }
 
     // Reader mode.
     if (open) {
       if (e.key === "Escape") { e.preventDefault(); closeReader(); }
+      else if (e.key === "u") { e.preventDefault(); toggleRead([open]); closeReader(); }
       else if (e.key === "c") { e.preventDefault(); openCompose(); }
       else if (e.key === "Enter") { e.preventDefault(); openReply(); }
       else if (e.key === "e") { e.preventDefault(); archiveOpen(); }
@@ -1102,12 +1350,22 @@
     if (e.key === "c") { e.preventDefault(); openCompose(); return; }
     const rows = [...list.querySelectorAll(".mail")];
     const idx = rows.indexOf(document.activeElement);
-    if (e.key === "Enter" && idx >= 0) {
+    // Row actions apply to the selection, else the focused row, else the hovered one.
+    const target = idx >= 0 ? rows[idx] : (root.hasAttribute("data-pointer-away") ? null : list.querySelector(".mail:hover"));
+    if (e.key === "Escape" && selected.size) {
       e.preventDefault();
-      openMail(MAIL.find((x) => x.id === rows[idx].dataset.id));
+      clearSelection();
+    } else if (e.key === "Enter" && idx >= 0) {
+      e.preventDefault();
+      openMail(mailFor(rows[idx]));
+    } else if (e.key === "x") {
+      if (target) { e.preventDefault(); toggleSelect(target); }
     } else if (e.key === "e") {
-      const target = idx >= 0 ? rows[idx] : (root.hasAttribute("data-pointer-away") ? null : list.querySelector(".mail:hover"));
-      if (target) { e.preventDefault(); archive(target); }
+      const lis = selected.size ? selectedRows() : target ? [target] : [];
+      if (lis.length) { e.preventDefault(); archiveRows(lis); }
+    } else if (e.key === "u") {
+      const lis = selected.size ? selectedRows() : target ? [target] : [];
+      if (lis.length) { e.preventDefault(); toggleRead(lis.map(mailFor)); }
     } else if (e.key === "ArrowDown" || e.key === "j") {
       e.preventDefault();
       (rows[idx + 1] || rows[0])?.focus();
@@ -1118,6 +1376,12 @@
       search.focus();
     }
   });
+
+  /* ---------- shortcut sheet ---------- */
+
+  shortcuts.querySelector("[data-close]").addEventListener("click", () => shortcuts.close());
+  // Clicking the backdrop (the dialog element itself, outside its content) closes it.
+  shortcuts.addEventListener("click", (e) => { if (e.target === shortcuts) shortcuts.close(); });
 
   /* ---------- theme ---------- */
 

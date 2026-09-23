@@ -22,6 +22,7 @@
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   </svg>
 
   <main class="app">
@@ -54,8 +55,49 @@
 
   <div class="tl-toast" id="toast" role="status" hidden>
     <svg class="tl-icon"><use href="#i-check"/></svg>
-    <span></span>
+    <span class="toast-text"></span>
+    <button class="toast-undo" id="toast-undo" type="button" hidden>Undo <kbd class="tl-kbd">z</kbd></button>
   </div>
+
+  <dialog class="tl-dialog shortcuts" id="shortcuts" aria-labelledby="shortcuts-title" tabindex="-1">
+    <div class="tl-dialog-handle"></div>
+    <header class="tl-dialog-header">
+      <h2 class="tl-dialog-title" id="shortcuts-title">Keyboard shortcuts</h2>
+      <button class="tl-dialog-close" type="button" aria-label="Close" data-close>
+        <svg class="tl-icon"><use href="#i-x"/></svg>
+      </button>
+    </header>
+    <div class="tl-dialog-body">
+      <section class="keys-group">
+        <h3>Move around</h3>
+        <dl class="keys">
+          <div><dt>Next / previous</dt><dd><kbd class="tl-kbd">j</kbd><kbd class="tl-kbd">k</kbd></dd></div>
+          <div><dt>Open</dt><dd><kbd class="tl-kbd">↩</kbd></dd></div>
+          <div><dt>Back, clear selection</dt><dd><kbd class="tl-kbd">esc</kbd></dd></div>
+          <div><dt>Switch mailbox</dt><dd><kbd class="tl-kbd">←</kbd><kbd class="tl-kbd">→</kbd></dd></div>
+          <div><dt>Search</dt><dd><kbd class="tl-kbd">/</kbd></dd></div>
+        </dl>
+      </section>
+      <section class="keys-group">
+        <h3>Act on mail</h3>
+        <dl class="keys">
+          <div><dt>Archive</dt><dd><kbd class="tl-kbd">e</kbd></dd></div>
+          <div><dt>Mark read / unread</dt><dd><kbd class="tl-kbd">u</kbd></dd></div>
+          <div><dt>Select</dt><dd><kbd class="tl-kbd">x</kbd></dd></div>
+          <div><dt>Select all</dt><dd><kbd class="tl-kbd">⌘</kbd><kbd class="tl-kbd">A</kbd></dd></div>
+          <div><dt>Undo</dt><dd><kbd class="tl-kbd">z</kbd></dd></div>
+        </dl>
+      </section>
+      <section class="keys-group">
+        <h3>Write</h3>
+        <dl class="keys">
+          <div><dt>New message</dt><dd><kbd class="tl-kbd">c</kbd></dd></div>
+          <div><dt>Reply, while reading</dt><dd><kbd class="tl-kbd">↩</kbd></dd></div>
+          <div><dt>Send</dt><dd><kbd class="tl-kbd">⌘</kbd><kbd class="tl-kbd">↩</kbd></dd></div>
+        </dl>
+      </section>
+    </div>
+  </dialog>
 
   <script src="./app.js"></script>
 </body>

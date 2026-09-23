@@ -38,6 +38,8 @@ body { margin: 0; min-height: 100dvh; }
   font-variant-numeric: tabular-nums;
 }
 #count { margin-inline-start: auto; }
+/* While rows are selected, the selection summary takes the "c New" hint's place. */
+.meta:has(.count-selected) > .meta-hint { display: none; }
 
 .views { display: flex; align-items: center; gap: 14px; }
 .view {
@@ -411,6 +413,11 @@ body { margin: 0; min-height: 100dvh; }
   background: color-mix(in oklab, var(--border) 75%, transparent);
 }
 .mail:focus-visible { outline: none; }
+/* Selected (x): a faint wash of the label colour; the divider hides so adjacent picks read as one block. */
+.mail[data-selected] { background: color-mix(in oklab, var(--label) 9%, transparent); }
+[data-trylle-theme="dark"] .mail[data-selected] { background: color-mix(in oklab, var(--label) 13%, transparent); }
+.mail[data-selected] + .mail[data-selected]::before { opacity: 0; }
+.count-selected { color: var(--foreground); font-weight: 600; }
 
 .mail-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mail-subject {
@@ -491,6 +498,42 @@ body { margin: 0; min-height: 100dvh; }
 .filter-clear:hover { color: var(--foreground); text-decoration: underline; }
 
 #empty { padding: 48px 16px; }
+
+/* Toast undo: a quiet text button with its key, flush right of the message. */
+.toast-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px -8px -4px 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms var(--ease-in-out);
+}
+.toast-undo:hover { background: var(--accent); }
+.toast-undo .tl-kbd { padding: 0 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent); }
+
+/* Shortcut sheet */
+.shortcuts { width: min(420px, calc(100vw - 32px)); }
+.shortcuts:focus { outline: none; }
+.shortcuts .tl-dialog-body { gap: 20px; }
+.keys-group h3 { margin: 0 0 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+.keys { display: grid; gap: 2px; margin: 0; font-size: 13px; }
+.keys > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 28px; }
+.keys dt { color: var(--foreground); }
+.keys dd { display: flex; gap: 4px; margin: 0; }
+.keys .tl-kbd {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border) 80%, transparent);
+}
 
 @media (max-width: 640px) {
   .app { padding: 8px 16px 64px; }
